@@ -103,7 +103,15 @@ class OutlookIndexer:
                     sender = str(item.SenderName) if hasattr(item, 'SenderName') else ""
                     recipient = str(item.To) if hasattr(item, 'To') else ""
                     subject = str(item.Subject) if hasattr(item, 'Subject') else ""
-                    body = str(item.Body) if hasattr(item, 'Body') else ""
+
+                    # Intentar obtener body en diferentes formatos
+                    body = ""
+                    if hasattr(item, 'Body') and item.Body:
+                        body = str(item.Body)
+                    elif hasattr(item, 'HTMLBody') and item.HTMLBody:
+                        # Si solo tiene HTML, usar eso
+                        body = str(item.HTMLBody)[:1000]  # Limitar a 1000 chars
+
                     date = str(item.ReceivedTime) if hasattr(item, 'ReceivedTime') else ""
 
                     c.execute('''
@@ -165,7 +173,14 @@ class OutlookIndexer:
                     sender = str(item.SenderName) if hasattr(item, 'SenderName') else ""
                     recipient = str(item.To) if hasattr(item, 'To') else ""
                     subject = str(item.Subject) if hasattr(item, 'Subject') else ""
-                    body = str(item.Body) if hasattr(item, 'Body') else ""
+
+                    # Intentar obtener body en diferentes formatos
+                    body = ""
+                    if hasattr(item, 'Body') and item.Body:
+                        body = str(item.Body)
+                    elif hasattr(item, 'HTMLBody') and item.HTMLBody:
+                        body = str(item.HTMLBody)[:1000]
+
                     date = str(item.ReceivedTime) if hasattr(item, 'ReceivedTime') else ""
 
                     c.execute('''
