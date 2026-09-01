@@ -30,7 +30,6 @@ setup(
     ],
     python_requires=">=3.7",
     install_requires=[
-        "libpst-python>=0.1.3",
         "extract-msg>=0.47.1",
         "olefile>=0.47",
     ],

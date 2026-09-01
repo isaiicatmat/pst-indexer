@@ -31,27 +31,13 @@ echo.
 echo Instalando dependencias...
 echo.
 
-REM Instalar extract-msg (principal)
+REM Instalar extract-msg
 echo Instalando extract-msg...
 python -m pip install extract-msg -q
-if errorlevel 1 (
-    echo ⚠️  Advertencia: Error instalando extract-msg
-)
 
 REM Instalar olefile
 echo Instalando olefile...
 python -m pip install olefile -q
-
-REM Intentar instalar libpst-python (opcional)
-echo.
-echo Intentando instalar libpst-python (opcional)...
-python -m pip install libpst-python 2>nul
-if errorlevel 1 (
-    echo ℹ️  Nota: libpst-python no se pudo instalar
-    echo   (Es opcional, la app funciona sin él)
-) else (
-    echo ✓ libpst-python instalado
-)
 
 echo.
 echo ==========================================

@@ -24,11 +24,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 try:
-    import pst
-except ImportError:
-    pst = None
-
-try:
     import extract_msg
 except ImportError:
     extract_msg = None
@@ -72,14 +67,7 @@ class EmailIndexer:
         """Indexar un archivo PST"""
         logger.info(f"Iniciando indexación de: {pst_path}")
 
-        # Intentar con libpst primero
-        if pst:
-            try:
-                return self._index_with_libpst(pst_path, progress_callback)
-            except Exception as e:
-                logger.warning(f"Error con libpst: {e}")
-
-        # Fallback a extract_msg para archivos .msg
+        # Intentar con extract_msg
         if extract_msg:
             try:
                 return self._index_with_extract_msg(pst_path, progress_callback)
@@ -93,59 +81,7 @@ class EmailIndexer:
             logger.error(f"Error indexando {pst_path}: {e}")
             return 0
 
-    def _index_with_libpst(self, pst_path, progress_callback):
-        """Indexar usando libpst-python"""
-        try:
-            pstfile = pst.PSTFile(pst_path)
-            items = []
-
-            def walk_folders(folder, depth=0):
-                for message in folder.get_messages():
-                    items.append(message)
-
-                for subfolder in folder.get_folders():
-                    walk_folders(subfolder, depth + 1)
-
-            walk_folders(pstfile.root_folder)
-
-            conn = sqlite3.connect(self.db_path)
-            c = conn.cursor()
-
-            total = len(items)
-            for idx, message in enumerate(items):
-                try:
-                    sender = getattr(message, 'sender', '') or ''
-                    recipient = getattr(message, 'recipient', '') or ''
-                    subject = getattr(message, 'subject', '') or ''
-                    body = getattr(message, 'body', '') or ''
-                    date = getattr(message, 'date', '') or ''
-
-                    # Convertir fecha a string si es datetime
-                    if hasattr(date, 'isoformat'):
-                        date = date.isoformat()
-
-                    c.execute('''
-                        INSERT OR IGNORE INTO emails
-                        (sender, recipient, subject, body, date, pst_file, indexed_date)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                    ''', (sender, recipient, subject, body, str(date), pst_path, datetime.now().isoformat()))
-
-                    if progress_callback and idx % 10 == 0:
-                        progress_callback(idx, total)
-                except Exception as e:
-                    logger.error(f"Error procesando mensaje: {e}")
-                    continue
-
-            conn.commit()
-            conn.close()
-            logger.info(f"Indexación completada: {total} correos")
-            return total
-
-        except Exception as e:
-            logger.error(f"Error con libpst: {e}")
-            raise
-
-    def _index_with_extract_msg(self, pst_path, progress_callback):
+def _index_with_extract_msg(self, pst_path, progress_callback):
         """Indexar archivos .msg dentro de PST"""
         try:
             import subprocess
