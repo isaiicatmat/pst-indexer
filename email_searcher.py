@@ -395,9 +395,15 @@ class EmailSearcherGUI:
     def index_folder(self, folder_path):
         """Indexar todos los PST en una carpeta"""
         pst_files = list(Path(folder_path).rglob('*.pst'))
+        logger.info(f"Buscando .pst en: {folder_path}")
+        logger.info(f"Archivos encontrados: {len(pst_files)}")
 
         if not pst_files:
-            messagebox.showwarning("Advertencia", "No se encontraron archivos .pst en la carpeta")
+            messagebox.showwarning("Advertencia",
+                f"No se encontraron archivos .pst en:\n{folder_path}\n\n"
+                "Verifica que:\n"
+                "1. Los archivos tengan extensión .pst\n"
+                "2. Estén en esa carpeta o subcarpetas")
             return
 
         # Ejecutar en thread para no bloquear GUI
@@ -421,7 +427,16 @@ class EmailSearcherGUI:
 
             self.status_var.set(f"✓ Indexación completada: {total_emails} correos")
             self.update_stats()
-            messagebox.showinfo("Éxito", f"Se indexaron {total_emails} correos de {len(pst_files)} archivo(s)")
+
+            if total_emails == 0:
+                messagebox.showwarning("Advertencia",
+                    f"Se procesaron {len(pst_files)} archivo(s) PST pero no se encontraron correos.\n\n"
+                    "Posibles causas:\n"
+                    "1. Los archivos PST están vacíos o corrupto\n"
+                    "2. Formato PST no compatible\n\n"
+                    "Revisa email_searcher.log para más detalles")
+            else:
+                messagebox.showinfo("Éxito", f"Se indexaron {total_emails} correos de {len(pst_files)} archivo(s)")
 
         except Exception as e:
             self.status_var.set("Error en indexación")
