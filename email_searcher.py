@@ -226,6 +226,11 @@ class EmailIndexer:
 
     def search(self, sender='', subject='', content='', date_from='', date_to=''):
         """Buscar en la base de datos"""
+        # Validar que al menos un criterio está presente
+        if not any([sender, subject, content, date_from, date_to]):
+            logger.warning("Búsqueda sin criterios rechazada")
+            return []
+
         conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
 
