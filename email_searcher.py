@@ -81,7 +81,7 @@ class EmailIndexer:
             logger.error(f"Error indexando {pst_path}: {e}")
             return 0
 
-def _index_with_extract_msg(self, pst_path, progress_callback):
+    def _index_with_extract_msg(self, pst_path, progress_callback):
         """Indexar archivos .msg dentro de PST"""
         try:
             import subprocess
