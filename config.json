@@ -1,0 +1,7 @@
+{
+  "default_pst_folder": "C:\\Users\\Alberto Avellan\\OneDrive - Pie Consulting\\Documentos\\Archivos de Outlook",
+  "database_path": "email_index.db",
+  "max_results_per_search": 1000,
+  "enable_logging": true,
+  "auto_update_on_startup": false
+}
