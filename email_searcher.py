@@ -72,19 +72,26 @@ class EmailIndexer:
         """Indexar un archivo PST"""
         logger.info(f"Iniciando indexación de: {pst_path}")
 
-        try:
-            # Intentar con libpst
-            if pst:
+        # Intentar con libpst primero
+        if pst:
+            try:
                 return self._index_with_libpst(pst_path, progress_callback)
-        except Exception as e:
-            logger.warning(f"Error con libpst: {e}")
+            except Exception as e:
+                logger.warning(f"Error con libpst: {e}")
 
         # Fallback a extract_msg para archivos .msg
         if extract_msg:
-            return self._index_with_extract_msg(pst_path, progress_callback)
+            try:
+                return self._index_with_extract_msg(pst_path, progress_callback)
+            except Exception as e:
+                logger.warning(f"Error con extract_msg: {e}")
 
-        # Si nada funciona, intentar lectura manual
-        return self._index_manual(pst_path, progress_callback)
+        # Fallback a lectura manual
+        try:
+            return self._index_manual(pst_path, progress_callback)
+        except Exception as e:
+            logger.error(f"Error indexando {pst_path}: {e}")
+            return 0
 
     def _index_with_libpst(self, pst_path, progress_callback):
         """Indexar usando libpst-python"""
