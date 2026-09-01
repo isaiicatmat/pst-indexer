@@ -215,31 +215,37 @@ class OutlookIndexer:
 
 
 def main():
+    import sys
+
     print("\n" + "="*50)
     print("  Indexador de Outlook v2")
     print("="*50 + "\n")
 
     indexer = OutlookIndexer()
 
-    print("Opciones:")
-    print("1. Indexar solo Bandeja de entrada")
-    print("2. Indexar TODAS las carpetas")
-    print()
-
-    opcion = input("Elige opción (1 o 2): ").strip()
+    # Si se pasa argumento, usarlo; si no, pedir
+    if len(sys.argv) > 1:
+        opcion = sys.argv[1]
+    else:
+        print("Opciones:")
+        print("1. Indexar solo Bandeja de entrada")
+        print("2. Indexar TODAS las carpetas")
+        print()
+        opcion = input("Elige opción (1 o 2): ").strip()
 
     if opcion == "1":
         count = indexer.indexar_carpeta("Bandeja de entrada")
     elif opcion == "2":
         count = indexer.indexar_todas_carpetas()
     else:
-        print("Opción inválida")
+        print("Opcion invalida")
         return
 
-    print(f"\n✓ Se indexaron {count} correos")
-    print("Ahora puedes usar: python email_searcher_modern.py\n")
+    print(f"\nSe indexaron {count} correos")
 
-    input("Presiona Enter para salir...")
+    # Solo pedir Enter si se ejecutó interactivamente
+    if len(sys.argv) <= 1:
+        input("Presiona Enter para salir...")
 
 
 if __name__ == '__main__':

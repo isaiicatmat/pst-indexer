@@ -14,8 +14,12 @@ class IndexWorker(QThread):
     def run(self):
         try:
             self.progress.emit("Iniciando indexación desde Outlook...\n")
-            result = subprocess.run(['python', 'indexar_desde_outlook_v2.py'],
+            # Pasar argumento 2 para indexar todas las carpetas sin pedir entrada
+            result = subprocess.run(['python', 'indexar_desde_outlook_v2.py', '2'],
                                   capture_output=True, text=True, timeout=600)
+
+            if result.returncode != 0:
+                self.progress.emit(f"Advertencia: {result.stderr}\n")
 
             # Contar correos indexados
             conn = sqlite3.connect('email_index.db')
@@ -24,10 +28,10 @@ class IndexWorker(QThread):
             count = c.fetchone()[0]
             conn.close()
 
-            self.progress.emit(f"✓ Indexación completada: {count} correos\n")
+            self.progress.emit(f"Indexacion completada: {count} correos\n")
             self.finished.emit(count)
         except Exception as e:
-            self.progress.emit(f"❌ Error: {str(e)}\n")
+            self.progress.emit(f"Error: {str(e)}\n")
             self.finished.emit(0)
 
 class Launcher(QMainWindow):
@@ -146,7 +150,7 @@ class Launcher(QMainWindow):
     def index_emails(self):
         self.log_text.setText("Iniciando indexación...\n")
         self.progress_bar.setVisible(True)
-        self.progress_bar.setValue(0)
+        self.progress_bar.setValue(50)
 
         self.indexer_thread = IndexWorker()
         self.indexer_thread.progress.connect(self.update_log)
