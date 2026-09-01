@@ -260,6 +260,7 @@ class EmailSearcherGUI:
         self.create_status_bar(main_frame)
 
         self.update_stats()
+        self.load_recent_emails()
 
     def setup_styles(self):
         """Configurar estilos"""
@@ -484,11 +485,12 @@ class EmailSearcherGUI:
 
     def _search_thread(self, sender, subject, content, date_from, date_to):
         """Thread para búsqueda"""
-        self.status_var.set("Buscando...")
+        self.status_var.set("🔍 Buscando...")
         self.root.update()
 
         try:
             results = self.indexer.search(sender, subject, content, date_from, date_to)
+            self.status_var.set(f"⏳ Cargando {len(results)} resultados...")
 
             # Limpiar tree
             for item in self.tree.get_children():
@@ -564,10 +566,15 @@ Asunto: {subject}
                 result = c.fetchone()
                 conn.close()
 
-                if result and result[0]:
-                    text_widget.insert(1.0, result[0])
+                if result:
+                    body_content = result[0]
+                    if body_content and body_content.strip():
+                        text_widget.insert(1.0, body_content)
+                    else:
+                        text_widget.insert(1.0, "[Este correo no tiene contenido de texto]\n\n"
+                                         "(Puede contener solo adjuntos o ser un correo con formato especial)")
                 else:
-                    text_widget.insert(1.0, "[Sin contenido]")
+                    text_widget.insert(1.0, "[No se encontró información del correo]")
             except Exception as e:
                 text_widget.insert(1.0, f"[Error al cargar: {str(e)}]")
 
@@ -614,6 +621,31 @@ Rango de fechas:
             self.stats_var.set(f"📊 {stats['total_emails']:,} correos | {stats['total_files']} archivo(s)")
         except Exception as e:
             logger.error(f"Error actualizando estadísticas: {e}")
+
+    def load_recent_emails(self):
+        """Cargar correos recientes al inicio"""
+        try:
+            # Usar query directa para obtener recientes sin criterio de búsqueda
+            conn = sqlite3.connect(self.indexer.db_path)
+            c = conn.cursor()
+            c.execute('SELECT sender, subject, body, date, pst_file FROM emails ORDER BY date DESC LIMIT 100')
+            results = c.fetchall()
+            conn.close()
+
+            for item in self.tree.get_children():
+                self.tree.delete(item)
+
+            for idx, (sender_val, subject_val, body, date_val, file) in enumerate(results):
+                sender_display = (sender_val[:50] + '...') if len(sender_val) > 50 else sender_val
+                subject_display = (subject_val[:50] + '...') if len(subject_val) > 50 else subject_val
+                file_display = os.path.basename(file)
+
+                self.tree.insert('', 'end', iid=idx,
+                               values=(sender_display, subject_display, date_val, file_display))
+
+            self.status_var.set(f"✓ {len(results)} correos recientes")
+        except Exception as e:
+            logger.debug(f"No hay correos indexados aún: {e}")
 
 
 def main():
