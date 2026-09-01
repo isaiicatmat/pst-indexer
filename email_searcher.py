@@ -82,27 +82,26 @@ class EmailIndexer:
             return 0
 
     def _index_with_extract_msg(self, pst_path, progress_callback):
-        """Indexar archivos .msg dentro de PST"""
+        """Indexar archivos .msg o carpetas con .msg"""
         try:
-            import subprocess
-            import tempfile
+            # Si es una carpeta, indexar todos los .msg dentro
+            path = Path(pst_path)
 
-            # Intentar extraer PST a MSG usando herramienta externa
-            temp_dir = tempfile.mkdtemp()
+            if path.is_dir():
+                msg_files = list(path.rglob('*.msg'))
+            else:
+                # Si es un archivo .msg individual
+                if pst_path.endswith('.msg'):
+                    msg_files = [path]
+                else:
+                    logger.warning(f"Archivo no soportado: {pst_path}")
+                    return 0
 
-            # Nota: Esto requiere readpst de libpst instalado
-            # readpst -e -o temp_dir archivo.pst
-            try:
-                subprocess.run(['readpst', '-e', '-o', temp_dir, pst_path],
-                             capture_output=True, check=True)
-            except (FileNotFoundError, subprocess.CalledProcessError) as e:
-                logger.warning(f"readpst no disponible: {e}")
+            if not msg_files:
+                logger.warning(f"No se encontraron archivos .msg en: {pst_path}")
                 return 0
 
-            # Indexar archivos .msg extraídos
-            msg_files = list(Path(temp_dir).rglob('*.msg'))
             total = len(msg_files)
-
             conn = sqlite3.connect(self.db_path)
             c = conn.cursor()
 
