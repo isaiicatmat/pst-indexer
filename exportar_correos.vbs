@@ -54,7 +54,7 @@ WScript.StdIn.ReadLine()
 
 ' Subrutina para exportar de forma recursiva
 Sub ExportarCarpeta(objFolder, strPath, ByRef intCount, ByRef intSubfolders)
-    Dim objItem, objSubfolder, strFileName
+    Dim objItem, objSubfolder, strFileName, intIntento
 
     WScript.Echo "Procesando: " & objFolder.Name & " (" & objFolder.Items.Count & " items)"
 
@@ -62,15 +62,28 @@ Sub ExportarCarpeta(objFolder, strPath, ByRef intCount, ByRef intSubfolders)
     For Each objItem In objFolder.Items
         If objItem.Class = 43 Then ' 43 = Mail message
             On Error Resume Next
-            strFileName = strPath & "\" & intCount & "_" & Left(Replace(objItem.Subject, "/", "_"), 100) & ".msg"
-            objItem.SaveAs strFileName, 3 ' 3 = Outlook message format
+
+            ' Nombre simple con número secuencial
+            strFileName = strPath & "\" & Right("00000" & intCount, 5) & ".msg"
+
+            ' Intentar guardar
+            objItem.SaveAs strFileName, 3 ' 3 = Outlook message format (.msg)
+
             If Err.Number = 0 Then
                 intCount = intCount + 1
                 If intCount Mod 100 = 0 Then
                     WScript.Echo "  " & intCount & " correos exportados..."
                 End If
             Else
-                WScript.Echo "  ERROR exportando: " & objItem.Subject
+                ' Intentar formato alternativo si falla
+                strFileName = strPath & "\" & Right("00000" & intCount, 5) & "_backup.msg"
+                Err.Clear
+                objItem.SaveAs strFileName, 3
+                If Err.Number = 0 Then
+                    intCount = intCount + 1
+                Else
+                    WScript.Echo "  ERROR: No se pudo guardar correo (Error: " & Err.Number & " - " & Err.Description & ")"
+                End If
             End If
             Err.Clear
             On Error Resume Next
