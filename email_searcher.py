@@ -82,16 +82,18 @@ class EmailIndexer:
             return 0
 
     def _index_with_extract_msg(self, pst_path, progress_callback):
-        """Indexar archivos .msg o carpetas con .msg"""
+        """Indexar archivos .msg, .pst o carpetas con .msg"""
         try:
-            # Si es una carpeta, indexar todos los .msg dentro
             path = Path(pst_path)
 
             if path.is_dir():
+                # Es una carpeta: buscar .msg y .pst
                 msg_files = list(path.rglob('*.msg'))
+                pst_files = list(path.rglob('*.pst'))
+                msg_files.extend(pst_files)
             else:
-                # Si es un archivo .msg individual
-                if pst_path.endswith('.msg'):
+                # Es un archivo individual
+                if pst_path.endswith('.msg') or pst_path.endswith('.pst'):
                     msg_files = [path]
                 else:
                     logger.warning(f"Archivo no soportado: {pst_path}")
@@ -397,12 +399,34 @@ class EmailSearcherGUI:
         logger.info(f"Buscando .pst en: {folder_path}")
         logger.info(f"Archivos encontrados: {len(pst_files)}")
 
+        # Listar TODOS los archivos para debugging
+        all_files = list(Path(folder_path).rglob('*.*'))
+        logger.info(f"Total de archivos en carpeta: {len(all_files)}")
+        for f in all_files[:20]:  # Mostrar primeros 20
+            logger.info(f"  - {f.name} ({f.suffix})")
+
         if not pst_files:
-            messagebox.showwarning("Advertencia",
-                f"No se encontraron archivos .pst en:\n{folder_path}\n\n"
-                "Verifica que:\n"
-                "1. Los archivos tengan extensión .pst\n"
-                "2. Estén en esa carpeta o subcarpetas")
+            # Buscar otros formatos también
+            msg_files = list(Path(folder_path).rglob('*.msg'))
+            ost_files = list(Path(folder_path).rglob('*.ost'))
+
+            mensaje = f"No se encontraron archivos .pst en:\n{folder_path}\n\n"
+
+            if msg_files:
+                mensaje += f"✓ Se encontraron {len(msg_files)} archivos .msg\n"
+                mensaje += "  (Usa estos en lugar de .pst)\n\n"
+
+            if ost_files:
+                mensaje += f"⚠ Se encontraron {len(ost_files)} archivos .ost\n"
+                mensaje += "  (Necesitan convertirse a .msg)\n\n"
+
+            if not msg_files and not ost_files:
+                mensaje += "Verifica que:\n"
+                mensaje += "1. Los archivos tengan extensión .pst, .msg o .ost\n"
+                mensaje += "2. Estén en esa carpeta o subcarpetas\n"
+                mensaje += "3. Revisa email_searcher.log para ver qué archivos hay"
+
+            messagebox.showwarning("Advertencia", mensaje)
             return
 
         # Ejecutar en thread para no bloquear GUI
