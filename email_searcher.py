@@ -359,10 +359,16 @@ class EmailSearcherGUI:
         hsb.configure(command=self.tree.xview)
 
         self.tree.column('#0', width=0, stretch=tk.NO)
-        self.tree.column('sender', width=200, heading='Remitente')
-        self.tree.column('subject', width=300, heading='Asunto')
-        self.tree.column('date', width=150, heading='Fecha')
-        self.tree.column('file', width=150, heading='Archivo')
+        self.tree.column('sender', width=200)
+        self.tree.column('subject', width=300)
+        self.tree.column('date', width=150)
+        self.tree.column('file', width=150)
+
+        self.tree.heading('#0', text='')
+        self.tree.heading('sender', text='Remitente')
+        self.tree.heading('subject', text='Asunto')
+        self.tree.heading('date', text='Fecha')
+        self.tree.heading('file', text='Archivo')
 
         self.tree.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
 
