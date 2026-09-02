@@ -8,6 +8,51 @@ import html as _html
 import re
 from datetime import datetime
 
+APP = "Buscador de Correos"
+
+
+def registrar_fallo(tipo, valor, traza):
+    """Guarda cualquier error imprevisto en un archivo y avisa al usuario.
+
+    Se instala antes de importar PyQt5 y los modulos propios: el fallo mas
+    habitual del programa empaquetado es un modulo que no viajo dentro del
+    .exe, y eso ocurre al importar, antes de que main() llegue a ejecutarse.
+    Como corre sin consola, sin esto el doble clic no mostraria nada.
+    """
+    import traceback
+    destino = None
+    try:
+        from motor_busqueda import carpeta_datos
+        destino = carpeta_datos()
+    except Exception:
+        destino = os.path.dirname(os.path.abspath(sys.executable)) \
+            if getattr(sys, "frozen", False) else os.path.expanduser("~")
+    ruta = os.path.join(destino, "errores.log")
+    try:
+        with open(ruta, "a", encoding="utf-8") as f:
+            f.write("\n" + "=" * 64 + "\n")
+            f.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\n")
+            traceback.print_exception(tipo, valor, traza, file=f)
+    except Exception:
+        pass
+    try:
+        from PyQt5.QtWidgets import QApplication as _App, QMessageBox as _Msg
+        if _App.instance() is None:
+            _App(sys.argv)
+        _Msg.critical(
+            None, APP,
+            "El programa encontró un problema y no puede continuar.\n\n"
+            f"{tipo.__name__}: {valor}\n\n"
+            f"Se guardó el detalle en:\n{ruta}\n\n"
+            "Envía ese archivo a quien te pasó el programa.")
+    except Exception:
+        pass
+    sys.__excepthook__(tipo, valor, traza)
+
+
+sys.excepthook = registrar_fallo
+
+
 from PyQt5.QtCore import (Qt, QThread, pyqtSignal, QTimer, QSize, QRect, QDate)
 from PyQt5.QtGui import (QFont, QColor, QPainter, QPen, QIcon, QKeySequence, QPalette)
 from PyQt5.QtWidgets import (
@@ -22,7 +67,6 @@ from motor_busqueda import (BaseCorreos, importar_base_antigua, carpeta_datos,
 from indexador_outlook import (Indexador, outlook_disponible,
                                montar_pst, desmontar_pst)
 
-APP = "Buscador de Correos"
 MESES = ["ene", "feb", "mar", "abr", "may", "jun",
          "jul", "ago", "sep", "oct", "nov", "dic"]
 

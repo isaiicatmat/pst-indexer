@@ -464,6 +464,111 @@ class VaciarIndiceTests(unittest.TestCase):
         self.assertIn(self.ruta, self.mensajes[0])
 
 
+class RegistroDeFallosTests(unittest.TestCase):
+    """Sin consola, un error invisible parece que el programa no hace nada."""
+
+    def test_escribe_el_error_en_un_archivo_y_avisa(self):
+        from PyQt5.QtWidgets import QMessageBox
+        import tempfile as tf
+        destino = tf.mkdtemp()
+        avisos = []
+        import motor_busqueda
+        orig_msg = QMessageBox.critical
+        orig_carpeta = motor_busqueda.carpeta_datos
+        salidas = []
+        orig_hook = sys.__excepthook__
+        QMessageBox.critical = staticmethod(lambda p, t, m, *a, **k: avisos.append(m))
+        motor_busqueda.carpeta_datos = lambda: destino
+        sys.__excepthook__ = lambda *a: salidas.append(a)
+        try:
+            try:
+                raise ValueError("algo se rompio")
+            except ValueError:
+                bc.registrar_fallo(*sys.exc_info())
+        finally:
+            QMessageBox.critical = orig_msg
+            motor_busqueda.carpeta_datos = orig_carpeta
+            sys.__excepthook__ = orig_hook
+
+        registro = os.path.join(destino, "errores.log")
+        self.assertTrue(os.path.exists(registro), "debe dejar un archivo de error")
+        with open(registro, encoding="utf-8") as f:
+            texto = f.read()
+        self.assertIn("ValueError", texto)
+        self.assertIn("algo se rompio", texto)
+        self.assertIn("Traceback", texto)
+
+        self.assertEqual(len(avisos), 1, "debe avisar al usuario")
+        self.assertIn("algo se rompio", avisos[0])
+        self.assertIn(registro, avisos[0], "debe decir donde quedo el detalle")
+
+    def test_si_no_puede_escribir_no_se_cuelga(self):
+        """Si ni siquiera se puede saber donde guardar, no debe empeorar las cosas."""
+        from PyQt5.QtWidgets import QMessageBox
+        import tempfile as tf
+        # Se finge un .exe en una carpeta temporal para que el respaldo escriba
+        # ahi y no en la carpeta personal de quien corre las pruebas.
+        refugio = tf.mkdtemp()
+        orig_msg = QMessageBox.critical
+        orig_hook = sys.__excepthook__
+        viejo_frozen = getattr(sys, "frozen", None)
+        viejo_exe = sys.executable
+        QMessageBox.critical = staticmethod(lambda *a, **k: None)
+        sys.__excepthook__ = lambda *a: None
+        sys.frozen = True
+        sys.executable = os.path.join(refugio, "BuscadorCorreos.exe")
+        import motor_busqueda
+        orig_carpeta = motor_busqueda.carpeta_datos
+        motor_busqueda.carpeta_datos = lambda: (_ for _ in ()).throw(OSError("sin acceso"))
+        try:
+            try:
+                raise RuntimeError("fallo doble")
+            except RuntimeError:
+                bc.registrar_fallo(*sys.exc_info())   # no debe lanzar nada
+            self.assertTrue(os.path.exists(os.path.join(refugio, "errores.log")),
+                            "el respaldo debe escribir junto al ejecutable")
+        finally:
+            motor_busqueda.carpeta_datos = orig_carpeta
+            QMessageBox.critical = orig_msg
+            sys.__excepthook__ = orig_hook
+            sys.executable = viejo_exe
+            if viejo_frozen is None:
+                del sys.frozen
+            else:
+                sys.frozen = viejo_frozen
+
+    def test_atrapa_un_fallo_al_importar(self):
+        """El fallo tipico del .exe: un modulo que no viajo dentro del paquete.
+
+        Ocurre al importar, antes de main(), por eso el capturador se instala
+        arriba del archivo y no dentro de la funcion.
+        """
+        import subprocess, tempfile as tf
+        d = tf.mkdtemp()
+        # un motor_busqueda que revienta, primero en la ruta de busqueda
+        with open(os.path.join(d, "motor_busqueda.py"), "w") as f:
+            f.write("raise ImportError('modulo ausente en el paquete')\n")
+        guion = os.path.join(d, "arranque.py")
+        with open(guion, "w", encoding="utf-8") as f:
+            f.write(
+                "import sys, os\n"
+                f"sys.path.insert(0, r{d!r})\n"
+                f"sys.path.insert(1, r{os.path.dirname(os.path.abspath(bc.__file__))!r})\n"
+                "sys.frozen = True\n"
+                f"sys.executable = os.path.join(r{d!r}, 'BuscadorCorreos.exe')\n"
+                "os.environ['QT_QPA_PLATFORM'] = 'offscreen'\n"
+                "import buscador_correos\n")
+        subprocess.run([sys.executable, guion], capture_output=True, text=True, cwd=d)
+
+        registro = os.path.join(d, "errores.log")
+        self.assertTrue(os.path.exists(registro),
+                        "un fallo al importar debe quedar registrado, no morir en silencio")
+        with open(registro, encoding="utf-8") as f:
+            texto = f.read()
+        self.assertIn("ImportError", texto)
+        self.assertIn("modulo ausente en el paquete", texto)
+
+
 class CierreTests(unittest.TestCase):
     def test_cerrar_con_busqueda_pendiente_no_truena(self):
         """El temporizador de busqueda no debe dispararse sobre una base cerrada."""
