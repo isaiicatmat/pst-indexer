@@ -53,7 +53,7 @@ if errorlevel 1 (
 
 if not exist "ENTREGAR" mkdir "ENTREGAR"
 copy /y "dist\BuscadorCorreos.exe" "ENTREGAR\" >nul
-copy /y "LEEME.md" "ENTREGAR\Instrucciones.txt" >nul 2>&1
+copy /y "INSTRUCCIONES.txt" "ENTREGAR\" >nul 2>&1
 
 echo.
 echo  ============================================================

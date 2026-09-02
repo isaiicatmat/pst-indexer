@@ -1,0 +1,106 @@
+====================================================================
+  BUSCADOR DE CORREOS  -  Cómo usarlo
+====================================================================
+
+Este programa hace una copia de tus correos de Outlook en tu
+computadora para poder encontrarlos al instante.
+
+
+LA PRIMERA VEZ
+--------------------------------------------------------------------
+
+  1. Doble clic en BuscadorCorreos. No hay que instalar nada.
+
+  2. Pulsa el botón azul "Traer mis correos de Outlook".
+     Tarda unos minutos. Verás una barra que avanza.
+     Puedes cancelar cuando quieras y seguir después.
+
+  3. Escribe lo que buscas.
+     Los resultados salen mientras tecleas, y el correo completo
+     aparece a la derecha. No hace falta abrir nada.
+
+
+QUÉ ESCRIBIR
+--------------------------------------------------------------------
+
+  factura                Todos los correos con esa palabra, esté en
+                         el remitente, el asunto o dentro del texto.
+
+  factura pendiente      Solo los que tengan las dos palabras.
+
+  "propuesta comercial"  Esa frase exacta. Las comillas importan.
+
+  4471                   Números de factura, folios, referencias.
+
+  maria                  También encuentra "María". Los acentos y
+                         las mayúsculas dan igual.
+
+  contr                  Contrato, contratación, contraparte.
+                         Basta con el principio de la palabra.
+
+
+CUANDO RECUERDAS LA FECHA
+--------------------------------------------------------------------
+
+  Pulsa "Filtros" y usa el desplegable "Fecha". Trae los casos de
+  siempre: hoy, últimos 7 días, últimos 30 días, últimos 3 meses,
+  este año, año pasado.
+
+  Para un periodo concreto elige "Entre dos fechas" y marca el día
+  de inicio y el de fin. Los dos días se incluyen.
+
+  OJO: si el botón "Filtros" está amarillo, hay un filtro puesto y
+  no estás viendo todos tus correos. Es la causa más común de "no
+  aparece nada". Pulsa "Limpiar filtros".
+
+
+ATAJOS
+--------------------------------------------------------------------
+
+  Ctrl + F     Saltar a la caja de búsqueda
+  Esc          Borrar todo y empezar de nuevo
+  Flechas      Pasar de un correo a otro
+  F5           Traer los correos nuevos
+
+
+MANTENERLO AL DÍA
+--------------------------------------------------------------------
+
+  Los correos que lleguen después no aparecen solos. Pulsa
+  "Actualizar correos": la primera vez tarda minutos, las
+  siguientes segundos, porque solo trae lo nuevo.
+
+  Para responder un correo, pulsa "Abrir en Outlook".
+
+
+SI ALGO NO SALE BIEN
+--------------------------------------------------------------------
+
+  Busco algo que sé que existe y no aparece
+      Mira si "Filtros" está amarillo y límpialo. Prueba con una
+      sola palabra, la más rara del correo. Si llegó hace poco,
+      pulsa "Actualizar correos".
+
+  Un correo aparece sin texto
+      Suele ser un correo que solo lleva una imagen o un adjunto.
+      Pulsa "Abrir en Outlook" para verlo completo.
+
+  Windows dice que el programa no es seguro
+      Es un aviso automático por ser un programa nuevo. Elige
+      "Más información" y luego "Ejecutar de todas formas".
+
+  Outlook pide permiso para que otro programa lo use
+      Acepta. Es el buscador pidiéndole tus correos a Outlook.
+
+
+TUS CORREOS NO CORREN NINGÚN RIESGO
+--------------------------------------------------------------------
+
+  El programa solo lee. Nunca borra, mueve, responde ni envía nada,
+  y no manda información por internet: la copia se queda en tu
+  computadora. Si dejas de usarlo, tus correos en Outlook siguen
+  exactamente igual.
+
+
+Si algo falla, anota qué estabas haciendo y toma una foto del
+mensaje que aparezca.
