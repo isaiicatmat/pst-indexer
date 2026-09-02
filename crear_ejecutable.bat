@@ -1,46 +1,70 @@
 @echo off
-chcp 65001 > nul
-echo ==========================================
-echo  Generador de Ejecutable
-echo  Buscador de Correos Outlook
-echo ==========================================
+setlocal
+title Crear ejecutable del Buscador de Correos
+cd /d "%~dp0"
+
+echo.
+echo  ============================================================
+echo   Creando el ejecutable para entregar al usuario final
+echo  ============================================================
 echo.
 
-REM Verificar Python
-python --version >nul 2>&1
-if errorlevel 1 (
-    echo ERROR: Python no encontrado
+set PY=
+for %%C in ("py -3" "python") do (
+    %%~C -c "import sys" >nul 2>&1 && if not defined PY set PY=%%~C
+)
+if not defined PY (
+    echo   No se encontro Python. Instalalo desde python.org
     pause
     exit /b 1
 )
 
-echo ✓ Python encontrado
-echo.
+echo  [1/3] Instalando lo necesario...
+%PY% -m pip install --quiet --upgrade pyinstaller PyQt5 pywin32
+if errorlevel 1 (
+    echo   Fallo la instalacion. Revisa tu conexion.
+    pause
+    exit /b 1
+)
 
-REM Instalar PyInstaller
-echo Instalando PyInstaller (esto puede tardar)...
-pip install pyinstaller -q
+echo  [2/3] Comprobando que todo funciona antes de empaquetar...
+%PY% probar_todo.py
+if errorlevel 1 (
+    echo.
+    echo   Hay pruebas que fallan. No se empaqueta un programa roto.
+    pause
+    exit /b 1
+)
 
-echo Instalando dependencias del proyecto...
-pip install -r requirements.txt -q
+echo  [3/3] Construyendo el ejecutable ^(tarda varios minutos^)...
+%PY% -m PyInstaller ^
+    --noconfirm --clean --windowed --onefile ^
+    --name BuscadorCorreos ^
+    --hidden-import win32com.client ^
+    --hidden-import win32timezone ^
+    --hidden-import pythoncom ^
+    --hidden-import pywintypes ^
+    buscador_correos.py
+if errorlevel 1 (
+    echo   Fallo la construccion.
+    pause
+    exit /b 1
+)
+
+if not exist "ENTREGAR" mkdir "ENTREGAR"
+copy /y "dist\BuscadorCorreos.exe" "ENTREGAR\" >nul
+copy /y "LEEME.md" "ENTREGAR\Instrucciones.txt" >nul 2>&1
 
 echo.
-echo Generando ejecutable...
+echo  ============================================================
+echo   LISTO
+echo  ============================================================
 echo.
-
-REM Crear ejecutable
-pyinstaller --onefile --windowed --name "Buscador de Correos" --icon=info.ico email_searcher.py
-
+echo   La carpeta ENTREGAR contiene lo que hay que pasarle
+echo   al usuario. Solo tiene que hacer doble clic en
+echo   BuscadorCorreos.exe: no necesita instalar Python.
 echo.
-echo ==========================================
-echo ✓ Ejecutable generado
-echo ==========================================
-echo.
-echo Ubicación: dist\Buscador de Correos.exe
-echo.
-echo Copia estos archivos juntos:
-echo - dist\Buscador de Correos.exe
-echo - ejecutar.bat (opcional)
-echo - COMO_EXPORTAR_CORREOS.md (documentación)
+echo   IMPORTANTE: comprimela en un .zip antes de enviarla.
+echo   Los correos bloquean los .exe sueltos.
 echo.
 pause

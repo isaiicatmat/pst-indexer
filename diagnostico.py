@@ -26,7 +26,8 @@ ns = win32com.client.Dispatch("Outlook.Application").GetNamespace("MAPI")
 
 print("\n" + "=" * 74)
 print("  QUE HAY EN OUTLOOK  vs  QUE QUEDO INDEXADO")
-print("=" * 74 + "\n")
+print("=" * 74)
+print("\n  Recorriendo Outlook (puede tardar un minuto)...\n")
 
 filas = []
 
@@ -57,6 +58,10 @@ def recorrer(carpetas, ruta=""):
             except Exception:
                 pass
         filas.append((completo, total, correos, omitida))
+        etiqueta = "(omitida)" if omitida else f"{correos} correos"
+        corta = completo if len(completo) <= 52 else "..." + completo[-49:]
+        print(f"    {corta:<54} {etiqueta}")
+        sys.stdout.flush()
         try:
             recorrer(c.Folders, completo)
         except Exception:

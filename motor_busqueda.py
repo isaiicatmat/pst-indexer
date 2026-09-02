@@ -5,9 +5,36 @@ Base de datos SQLite + indice de texto completo (FTS5) para busquedas instantane
 import os
 import re
 import sqlite3
+import sys
 from datetime import datetime
 
 DB_DEFAULT = "correos.db"
+
+
+def carpeta_datos():
+    """Donde se guarda correos.db.
+
+    Al empaquetar con PyInstaller, __file__ apunta a una carpeta temporal que
+    Windows borra al cerrar: la base se perderia en cada sesion. Por eso se usa
+    la carpeta del ejecutable. Si esa carpeta es de solo lectura (por ejemplo
+    dentro de Archivos de programa), se cae a la carpeta de datos del usuario.
+    """
+    if getattr(sys, "frozen", False):
+        base = os.path.dirname(os.path.abspath(sys.executable))
+    else:
+        base = os.path.dirname(os.path.abspath(__file__))
+    prueba = os.path.join(base, ".prueba_escritura")
+    try:
+        with open(prueba, "w") as f:
+            f.write("x")
+        os.remove(prueba)
+        return base
+    except OSError:
+        alterna = os.path.join(
+            os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"),
+            "BuscadorCorreos")
+        os.makedirs(alterna, exist_ok=True)
+        return alterna
 ESQUEMA_VERSION = 2
 
 

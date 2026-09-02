@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import (
     QDateEdit, QComboBox, QToolButton, QSizePolicy, QStackedWidget, QShortcut,
     QFileDialog)
 
-from motor_busqueda import BaseCorreos, importar_base_antigua
+from motor_busqueda import BaseCorreos, importar_base_antigua, carpeta_datos
 from indexador_outlook import (Indexador, outlook_disponible,
                                montar_pst, desmontar_pst)
 
@@ -694,7 +694,7 @@ def main():
         QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
     app = QApplication(sys.argv)
     app.setApplicationName(APP)
-    ruta = os.path.join(os.path.dirname(os.path.abspath(__file__)), "correos.db")
+    ruta = os.path.join(carpeta_datos(), "correos.db")
     try:
         v = Ventana(ruta)
     except Exception as e:

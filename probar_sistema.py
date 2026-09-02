@@ -1,6 +1,7 @@
 """Pruebas automaticas del sistema. Ejecuta:  python probar_sistema.py"""
 import os, sys, tempfile, unittest
-from motor_busqueda import BaseCorreos, normalizar_fecha, importar_base_antigua
+from motor_busqueda import (BaseCorreos, normalizar_fecha, importar_base_antigua,
+                            carpeta_datos)
 from indexador_outlook import html_a_texto, outlook_disponible
 
 CORREOS = [
@@ -200,6 +201,61 @@ class MigracionTests(unittest.TestCase):
         db = BaseCorreos(tempfile.mktemp(suffix=".db"))
         self.assertEqual(importar_base_antigua(db, "no_existe_12345.db"), 0)
         db.cerrar()
+
+
+class CarpetaDatosTests(unittest.TestCase):
+    """Donde se guarda la base al empaquetar con PyInstaller."""
+
+    def test_devuelve_carpeta_escribible(self):
+        d = carpeta_datos()
+        self.assertTrue(os.path.isdir(d))
+        p = os.path.join(d, ".prueba_tmp")
+        with open(p, "w") as f:
+            f.write("x")
+        os.remove(p)
+
+    def test_congelado_usa_la_carpeta_del_ejecutable(self):
+        import sys as _s, tempfile
+        d = tempfile.mkdtemp()
+        exe = os.path.join(d, "BuscadorCorreos.exe")
+        with open(exe, "wb") as f:
+            f.write(b"MZ")
+        viejo_frozen = getattr(_s, "frozen", None)
+        viejo_exe = _s.executable
+        try:
+            _s.frozen = True
+            _s.executable = exe
+            self.assertEqual(carpeta_datos(), d,
+                             "la base debe quedar junto al .exe, no en la carpeta temporal")
+        finally:
+            _s.executable = viejo_exe
+            if viejo_frozen is None:
+                del _s.frozen
+            else:
+                _s.frozen = viejo_frozen
+
+    def test_carpeta_de_solo_lectura_cae_a_datos_del_usuario(self):
+        import sys as _s, tempfile, stat
+        d = tempfile.mkdtemp()
+        exe = os.path.join(d, "app.exe")
+        with open(exe, "wb") as f:
+            f.write(b"MZ")
+        viejo_frozen = getattr(_s, "frozen", None)
+        viejo_exe = _s.executable
+        os.chmod(d, stat.S_IREAD | stat.S_IEXEC)
+        try:
+            _s.frozen = True
+            _s.executable = exe
+            destino = carpeta_datos()
+            self.assertNotEqual(destino, d, "no debe intentar escribir donde no puede")
+            self.assertTrue(os.path.isdir(destino))
+        finally:
+            os.chmod(d, stat.S_IRWXU)
+            _s.executable = viejo_exe
+            if viejo_frozen is None:
+                del _s.frozen
+            else:
+                _s.frozen = viejo_frozen
 
 
 class EntornoTests(unittest.TestCase):
