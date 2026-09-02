@@ -11,6 +11,22 @@ from datetime import datetime
 DB_DEFAULT = "correos.db"
 
 
+def porcentaje(parte, total):
+    """Texto del porcentaje que NUNCA redondea a 100 si falta algo.
+
+    5713 de 5728 es 99.74%, y mostrarlo como '100%' oculta que hay 15 correos
+    sin contenido. Solo se dice 100% cuando de verdad estan todos.
+    """
+    if not total:
+        return "0%"
+    if parte >= total:
+        return "100%"
+    if parte <= 0:
+        return "0%"
+    p = 100.0 * parte / total
+    return f"{min(p, 99.9):.1f}%"
+
+
 def carpeta_datos():
     """Donde se guarda correos.db.
 

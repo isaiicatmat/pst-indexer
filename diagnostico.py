@@ -10,7 +10,7 @@ except Exception:
     pass
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from motor_busqueda import BaseCorreos, carpeta_datos
+from motor_busqueda import BaseCorreos, carpeta_datos, porcentaje
 from indexador_outlook import CARPETAS_OMITIDAS, etiqueta_tienda, outlook_disponible
 
 ok, motivo = outlook_disponible()
@@ -85,6 +85,7 @@ print("  " + "-" * 72)
 
 suma_out = suma_db = 0
 sospechosas = []
+sobrantes = []
 for ruta, total, omitida in filas:
     corta = ruta if len(ruta) <= 49 else "..." + ruta[-46:]
     if omitida:
@@ -97,6 +98,9 @@ for ruta, total, omitida in filas:
     if total and en_base == 0:
         marca = "  <-- NADA INDEXADO"
         sospechosas.append((ruta, total, en_base))
+    elif en_base > total:
+        marca = "  <-- SOBRAN"
+        sobrantes.append((ruta, total, en_base))
     print(f"  {corta:<50} {total:>9} {en_base:>9}{marca}")
 
 print("  " + "-" * 72)
@@ -104,8 +108,8 @@ print(f"  {'TOTAL':<50} {suma_out:>9} {suma_db:>9}")
 print("\n  OUTLOOK incluye citas, contactos y tareas; INDEXADO solo correos,")
 print("  asi que es normal que la primera columna sea algo mayor.")
 
-pct = (100 * con_cuerpo / total_db) if total_db else 0
-print(f"\n  Base de datos: {total_db} correos, {con_cuerpo} con contenido ({pct:.0f}%)")
+print(f"\n  Base de datos: {total_db} correos, {con_cuerpo} con contenido "
+      f"({porcentaje(con_cuerpo, total_db)})")
 
 huerfanas = set(indexadas) - {r for r, _, o in filas if not o}
 if huerfanas:
@@ -120,6 +124,18 @@ if sospechosas:
     for ruta, total, _ in sospechosas:
         print(f"    {ruta}: {total} elementos en Outlook, 0 en la base")
     print("\n  Pulsa 'Actualizar correos' en la aplicacion.")
-else:
+elif not sobrantes:
     print("\n  No hay carpetas con correos sin indexar.")
+
+if sobrantes:
+    de_mas = sum(b - o for _, o, b in sobrantes)
+    print(f"\n  LA BASE TIENE {de_mas} CORREOS QUE OUTLOOK YA NO OFRECE:\n")
+    for ruta, total, en_base in sobrantes:
+        print(f"    {ruta}: {total} en Outlook, {en_base} en la base")
+    print("\n  Suele significar que se indexo un archivo .pst que despues se")
+    print("  cerro en Outlook. Los correos siguen siendo buscables, pero ya no")
+    print("  se pueden abrir con 'Abrir en Outlook'.")
+    print("\n  Para dejar solo lo que Outlook ofrece ahora:")
+    print("  menu ... > 'Vaciar el indice y empezar de cero', y luego")
+    print("  'Actualizar correos'.")
 print()

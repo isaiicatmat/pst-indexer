@@ -17,7 +17,8 @@ from PyQt5.QtWidgets import (
     QDateEdit, QComboBox, QToolButton, QSizePolicy, QStackedWidget, QShortcut,
     QFileDialog, QMenu)
 
-from motor_busqueda import BaseCorreos, importar_base_antigua, carpeta_datos
+from motor_busqueda import (BaseCorreos, importar_base_antigua, carpeta_datos,
+                            porcentaje)
 from indexador_outlook import (Indexador, outlook_disponible,
                                montar_pst, desmontar_pst)
 
@@ -391,10 +392,11 @@ class Ventana(QMainWindow):
     def _refrescar_estado(self):
         t = self.base.total()
         c = self.base.total_con_cuerpo()
-        pct = (100 * c / t) if t else 0
-        self.estado.setText(
-            f"{t:,} correos indexados   ·   {c:,} con contenido legible ({pct:.0f}%)"
-            .replace(",", " "))
+        texto = (f"{t:,} correos indexados   ·   "
+                 f"{c:,} con contenido legible ({porcentaje(c, t)})").replace(",", " ")
+        if t and c < t:
+            texto += f"   ·   {t - c} sin texto"
+        self.estado.setText(texto)
 
     def _nota(self, texto):
         self.pista.setText(texto)

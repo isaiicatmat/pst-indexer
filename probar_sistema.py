@@ -1,7 +1,7 @@
 """Pruebas automaticas del sistema. Ejecuta:  python probar_sistema.py"""
 import os, sys, tempfile, unittest
 from motor_busqueda import (BaseCorreos, normalizar_fecha, importar_base_antigua,
-                            carpeta_datos)
+                            carpeta_datos, porcentaje)
 from indexador_outlook import html_a_texto, outlook_disponible
 
 CORREOS = [
@@ -280,6 +280,38 @@ class CarpetaDatosTests(unittest.TestCase):
                 del _s.frozen
             else:
                 _s.frozen = viejo_frozen
+
+
+class PorcentajeTests(unittest.TestCase):
+    """El porcentaje no debe mentir por redondeo."""
+
+    def test_no_redondea_a_100_si_falta_alguno(self):
+        self.assertEqual(porcentaje(5713, 5728), "99.7%")
+        self.assertEqual(porcentaje(9999, 10000), "99.9%")
+        self.assertEqual(porcentaje(99999, 100000), "99.9%")
+
+    def test_100_solo_cuando_estan_todos(self):
+        self.assertEqual(porcentaje(5728, 5728), "100%")
+        self.assertEqual(porcentaje(1, 1), "100%")
+
+    def test_casos_limite(self):
+        self.assertEqual(porcentaje(0, 0), "0%")
+        self.assertEqual(porcentaje(0, 100), "0%")
+        self.assertEqual(porcentaje(1, 3), "33.3%")
+
+    def test_la_barra_de_estado_dice_cuantos_faltan(self):
+        import tempfile as tf
+        ruta = os.path.join(tf.mkdtemp(), "correos.db")
+        db = BaseCorreos(ruta)
+        db.guardar([dict(entry_id=f"X{i}", carpeta="B", remitente="A", correo_rem="",
+                         destinatarios="", asunto=f"a{i}",
+                         cuerpo="" if i < 15 else "texto",
+                         fecha="2024-01-01 00:00:00", adjuntos=0)
+                    for i in range(5728)])
+        self.assertEqual(db.total(), 5728)
+        self.assertEqual(db.total_con_cuerpo(), 5713)
+        self.assertEqual(porcentaje(db.total_con_cuerpo(), db.total()), "99.7%")
+        db.cerrar()
 
 
 class EntornoTests(unittest.TestCase):

@@ -157,6 +157,9 @@ class InterfazTests(unittest.TestCase):
         t = self.v.estado.text()
         self.assertIn("indexados", t)
         self.assertIn("con contenido legible", t)
+        # de los 4 correos de prueba, uno no tiene cuerpo
+        self.assertIn("1 sin texto", t)
+        self.assertNotIn("(100%)", t, "no debe decir 100% si falta contenido")
 
     def test_15_copiar_al_portapapeles(self):
         self._buscar("factura")
