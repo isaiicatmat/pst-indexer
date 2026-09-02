@@ -1,2 +1,5 @@
 PyQt5>=5.15.0
 pywin32>=300; sys_platform == "win32"
+
+# Solo para el servidor MCP (opcional)
+mcp>=2.0.0

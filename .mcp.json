@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "correos": {
+      "command": "python",
+      "args": ["servidor_mcp.py"],
+      "env": {}
+    }
+  }
+}

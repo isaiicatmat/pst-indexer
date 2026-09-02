@@ -6,6 +6,7 @@ import os
 import re
 import sqlite3
 import sys
+import urllib.request
 from datetime import datetime
 
 DB_DEFAULT = "correos.db"
@@ -54,7 +55,14 @@ def carpeta_datos():
 ESQUEMA_VERSION = 2
 
 
-def _conectar(ruta):
+def _conectar(ruta, solo_lectura=False):
+    if solo_lectura:
+        # SQLite rechaza cualquier escritura a nivel de conexion: la garantia no
+        # depende de que el codigo de arriba se porte bien.
+        uri = "file:" + urllib.request.pathname2url(os.path.abspath(ruta)) + "?mode=ro"
+        con = sqlite3.connect(uri, uri=True)
+        con.row_factory = sqlite3.Row
+        return con
     con = sqlite3.connect(ruta)
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA journal_mode=WAL")
@@ -74,12 +82,18 @@ def hay_fts5(con):
 class BaseCorreos:
     """Capa de datos. Guarda correos y los busca rapido."""
 
-    def __init__(self, ruta=DB_DEFAULT):
+    def __init__(self, ruta=DB_DEFAULT, solo_lectura=False):
         self.ruta = ruta
         self.cerrada = False
-        self.con = _conectar(ruta)
-        self.fts = hay_fts5(self.con)
-        self._crear_esquema()
+        self.solo_lectura = solo_lectura
+        self.con = _conectar(ruta, solo_lectura)
+        if solo_lectura:
+            self.fts = self.con.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='correos_fts'"
+            ).fetchone() is not None
+        else:
+            self.fts = hay_fts5(self.con)
+            self._crear_esquema()
 
     # ---------------------------------------------------------------- esquema
     def _crear_esquema(self):
@@ -151,6 +165,8 @@ class BaseCorreos:
 
     def guardar(self, correos):
         """Inserta o ACTUALIZA (upsert por entry_id). Devuelve cuantos se escribieron."""
+        if self.solo_lectura:
+            raise PermissionError("Esta base se abrio en modo de solo lectura.")
         ahora = datetime.now().isoformat(timespec="seconds")
         filas = [(c.get("entry_id"), c.get("carpeta", ""), c.get("remitente", ""),
                   c.get("correo_rem", ""), c.get("destinatarios", ""), c.get("asunto", ""),
@@ -184,6 +200,8 @@ class BaseCorreos:
 
     def vaciar(self):
         """Deja la base vacia sin tener que borrar archivos a mano."""
+        if self.solo_lectura:
+            raise PermissionError("Esta base se abrio en modo de solo lectura.")
         self.con.execute("DELETE FROM correos")
         if self.fts:
             self.con.execute("INSERT INTO correos_fts(correos_fts) VALUES ('rebuild')")

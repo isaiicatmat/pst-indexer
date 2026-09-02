@@ -60,6 +60,32 @@ arreglarlo.
 
 ---
 
+## Usar los correos desde Claude Code (opcional)
+
+`servidor_mcp.py` expone el índice a Claude Code para poder preguntar por el
+correo en lenguaje natural. Es independiente del buscador: si no se usa, no
+estorba.
+
+```
+python -m pip install mcp
+claude mcp add correos -- python servidor_mcp.py
+```
+
+También sirve el `.mcp.json` de la carpeta, que Claude Code detecta solo.
+
+Expone tres herramientas, todas de lectura: `buscar_correos`, `leer_correo` y
+`resumen_indice`.
+
+**Lo que sale de la computadora.** El contenido de los correos que Claude
+consulte viaja a los servidores del modelo. Es correo de trabajo: conviene
+tenerlo claro antes de activarlo.
+
+**Lo que no puede hacer.** La base se abre con `mode=ro` de SQLite, así que la
+conexión rechaza cualquier escritura: la garantía no depende de que el código
+se porte bien. No hay ninguna herramienta para enviar, responder, mover ni
+borrar. Cada búsqueda devuelve 20 correos por defecto y 50 como máximo, y el
+texto de un correo se recorta a 20 000 caracteres.
+
 ## Para quien mantenga esto
 
 ```
@@ -67,7 +93,8 @@ buscador_correos.py    Interfaz (PyQt5). Punto de entrada.
 motor_busqueda.py      Base SQLite + índice FTS5. Toda la búsqueda.
 indexador_outlook.py   Lectura de Outlook por COM.
 verificar.py           Diagnóstico del entorno.
-probar_todo.py         Las 69 pruebas automáticas.
+servidor_mcp.py        Servidor MCP de solo lectura (opcional).
+probar_todo.py         Las 141 pruebas automáticas.
 _version_anterior/     Código antiguo, ya no se usa.
 ```
 
