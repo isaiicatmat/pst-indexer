@@ -92,6 +92,16 @@ Ejecutar las pruebas:
 python probar_todo.py
 ```
 
+### Antes de entregar
+
+`correos.db` contiene **todos los correos de la computadora donde se ejecutó**,
+con su texto completo. Nunca debe salir de ahí.
+
+Por eso `crear_ejecutable.bat` rehace la carpeta `ENTREGAR` desde cero en cada
+compilación y se detiene si encuentra una base de datos dentro. Para probar el
+programa usa `dist\BuscadorCorreos.exe`, no el de `ENTREGAR`: al abrirlo se
+crea la base junto al ejecutable.
+
 ### Ejecutar los .bat desde PowerShell
 
 PowerShell no ejecuta programas de la carpeta actual sin indicarlo. Hay que

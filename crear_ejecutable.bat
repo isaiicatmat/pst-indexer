@@ -51,9 +51,23 @@ if errorlevel 1 (
     exit /b 1
 )
 
-if not exist "ENTREGAR" mkdir "ENTREGAR"
+rem La carpeta se rehace desde cero: si se probo el .exe desde ahi, dentro
+rem quedo correos.db con TODO el correo de esta computadora.
+if exist "ENTREGAR" rmdir /s /q "ENTREGAR"
+mkdir "ENTREGAR"
 copy /y "dist\BuscadorCorreos.exe" "ENTREGAR\" >nul
 copy /y "INSTRUCCIONES.txt" "ENTREGAR\" >nul 2>&1
+
+echo.
+echo  Contenido de ENTREGAR ^(esto es lo que se envia^):
+echo.
+for %%F in ("ENTREGAR\*") do echo    %%~nxF   %%~zF bytes
+echo.
+if exist "ENTREGAR\correos.db" (
+    echo  ALTO: hay una base de datos con correos dentro. NO la envies.
+    pause
+    exit /b 1
+)
 
 echo.
 echo  ============================================================
@@ -66,5 +80,9 @@ echo   BuscadorCorreos.exe: no necesita instalar Python.
 echo.
 echo   IMPORTANTE: comprimela en un .zip antes de enviarla.
 echo   Los correos bloquean los .exe sueltos.
+echo.
+echo   Para probar el programa usa  dist\BuscadorCorreos.exe
+echo   y NO el de ENTREGAR: al abrirlo se crea ahi correos.db
+echo   con el correo de esta computadora.
 echo.
 pause
