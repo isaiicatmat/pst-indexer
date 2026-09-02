@@ -302,6 +302,67 @@ class CarpetaDatosTests(unittest.TestCase):
                 _s.frozen = viejo_frozen
 
 
+class OrigenTests(unittest.TestCase):
+    """De que archivo de Outlook salio cada correo."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.ruta = os.path.join(self.dir, "correos.db")
+        self.db = BaseCorreos(self.ruta)
+
+    def tearDown(self):
+        self.db.cerrar()
+
+    def _correo(self, eid, origen, carpeta="Bandeja"):
+        return dict(entry_id=eid, carpeta=carpeta, remitente="A", correo_rem="",
+                    destinatarios="", asunto=f"Asunto {eid}", cuerpo="texto",
+                    fecha="2024-01-01 10:00:00", origen=origen, adjuntos=0)
+
+    def test_guarda_y_devuelve_la_ruta(self):
+        ruta_pst = r"C:\Users\Isai\Documents\Archivos de Outlook\buzon.pst"
+        self.db.guardar([self._correo("A1", ruta_pst)])
+        c = self.db.por_id(self.db.recientes(1)[0]["id"])
+        self.assertEqual(c["origen"], ruta_pst)
+
+    def test_agrupa_por_archivo_de_origen(self):
+        a = r"C:\Archivos de Outlook\buzon.pst"
+        b = r"C:\Indexer\pst-file\archivo.pst"
+        self.db.guardar([self._correo(f"A{i}", a) for i in range(3)]
+                        + [self._correo(f"B{i}", b) for i in range(5)])
+        origenes = dict((o, n) for o, n, _ in self.db.origenes())
+        self.assertEqual(origenes[a], 3)
+        self.assertEqual(origenes[b], 5)
+
+    def test_ordena_por_cantidad(self):
+        self.db.guardar([self._correo(f"A{i}", "uno.pst") for i in range(2)]
+                        + [self._correo(f"B{i}", "dos.pst") for i in range(7)])
+        self.assertEqual(self.db.origenes()[0][0], "dos.pst")
+
+    def test_base_de_version_anterior_se_actualiza_sola(self):
+        """Una base sin la columna no debe romper la aplicacion."""
+        import sqlite3
+        vieja = os.path.join(self.dir, "antigua.db")
+        con = sqlite3.connect(vieja)
+        con.execute("""CREATE TABLE correos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, entry_id TEXT UNIQUE,
+            carpeta TEXT NOT NULL DEFAULT '', remitente TEXT NOT NULL DEFAULT '',
+            correo_rem TEXT NOT NULL DEFAULT '', destinatarios TEXT NOT NULL DEFAULT '',
+            asunto TEXT NOT NULL DEFAULT '', cuerpo TEXT NOT NULL DEFAULT '',
+            fecha TEXT NOT NULL DEFAULT '', adjuntos INTEGER NOT NULL DEFAULT 0,
+            indexado TEXT NOT NULL DEFAULT '')""")
+        con.execute("INSERT INTO correos (entry_id, asunto, cuerpo, fecha) "
+                    "VALUES ('V1','Correo viejo','contenido','2024-01-01 10:00:00')")
+        con.commit(); con.close()
+
+        db = BaseCorreos(vieja)          # debe anadir la columna sin perder nada
+        self.assertEqual(db.total(), 1)
+        self.assertEqual(db.por_id(1)["origen"], "")
+        db.guardar([self._correo("V2", "nuevo.pst")])
+        self.assertEqual(db.total(), 2)
+        self.assertEqual(len(db.buscar(texto="viejo")), 1)
+        db.cerrar()
+
+
 class PorcentajeTests(unittest.TestCase):
     """El porcentaje no debe mentir por redondeo."""
 

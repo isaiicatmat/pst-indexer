@@ -107,7 +107,7 @@ def _texto(item, attr):
         return ""
 
 
-def leer_correo(item, carpeta):
+def leer_correo(item, carpeta, origen=""):
     if _texto(item, "Class") not in ("", str(CLASE_CORREO)):
         try:
             if int(item.Class) != CLASE_CORREO:
@@ -124,6 +124,7 @@ def leer_correo(item, carpeta):
     return {
         "entry_id": _texto(item, "EntryID") or None,
         "carpeta": carpeta,
+        "origen": origen,
         "remitente": _texto(item, "SenderName") or correo_rem,
         "correo_rem": correo_rem,
         "destinatarios": _texto(item, "To"),
@@ -134,7 +135,7 @@ def leer_correo(item, carpeta):
     }
 
 
-def _recolectar_carpetas(carpetas, acumulado, ruta=""):
+def _recolectar_carpetas(carpetas, acumulado, ruta="", origen=""):
     for c in carpetas:
         try:
             nombre = str(c.Name)
@@ -143,9 +144,9 @@ def _recolectar_carpetas(carpetas, acumulado, ruta=""):
         if nombre.lower() in CARPETAS_OMITIDAS:
             continue
         completo = f"{ruta}/{nombre}" if ruta else nombre
-        acumulado.append((completo, c))
+        acumulado.append((completo, c, origen))
         try:
-            _recolectar_carpetas(c.Folders, acumulado, completo)
+            _recolectar_carpetas(c.Folders, acumulado, completo, origen)
         except Exception:
             pass
     return acumulado
@@ -154,11 +155,18 @@ def _recolectar_carpetas(carpetas, acumulado, ruta=""):
 OL_UNICODE = 3          # olStoreUnicode
 
 
-def _ruta_de(tienda):
+def ruta_archivo(tienda):
+    """Ruta del archivo tal cual la reporta Outlook, para mostrarla."""
     try:
-        return os.path.normcase(os.path.abspath(str(tienda.Store.FilePath or "")))
+        return str(tienda.Store.FilePath or "")
     except Exception:
         return ""
+
+
+def _ruta_de(tienda):
+    """Igual, pero normalizada: solo para comparar rutas entre si."""
+    r = ruta_archivo(tienda)
+    return os.path.normcase(os.path.abspath(r)) if r else ""
 
 
 def pst_montados(ns):
@@ -293,7 +301,8 @@ class Indexador:
             for tienda in ns.Folders:
                 try:
                     _recolectar_carpetas(tienda.Folders, carpetas,
-                                         etiqueta_tienda(tienda, ns))
+                                         etiqueta_tienda(tienda, ns),
+                                         ruta_archivo(tienda))
                 except Exception:
                     continue
             if not carpetas:
@@ -310,7 +319,7 @@ class Indexador:
             self._avisar(f"{len(carpetas)} carpetas, {total} correos en total.", 0, total)
 
             hechos = guardados = 0
-            for nombre, carpeta in carpetas:
+            for nombre, carpeta, origen in carpetas:
                 if self.cancelado():
                     break
                 try:
@@ -332,7 +341,7 @@ class Indexador:
                     try:
                         eid = str(item.EntryID)
                         if not (solo_nuevos and eid in conocidos):
-                            datos = leer_correo(item, nombre)
+                            datos = leer_correo(item, nombre, origen)
                             if datos and datos["entry_id"]:
                                 buffer.append(datos)
                     except Exception:

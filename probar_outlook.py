@@ -290,6 +290,35 @@ class EtiquetaTiendaTests(unittest.TestCase):
         db.cerrar()
 
 
+class RutaDeOrigenTests(unittest.TestCase):
+    def test_cada_correo_guarda_el_archivo_del_que_salio(self):
+        ruta = os.path.join(tempfile.mkdtemp(), "correos.db")
+        db = BaseCorreos(ruta)
+        ns = outlook_de_prueba()
+        ns.Folders[0].Store = FakeStore(r"C:\Archivos de Outlook\buzon.pst")
+        ns.Folders.append(FakeFolder("Archivo 2019", sub=[
+            FakeFolder("Bandeja de entrada", [
+                FakeItem("Z1", "Correo archivado", body="del archivo viejo")])],
+            archivo=r"C:\Respaldos\archivo2019.pst"))
+        instalar_falso(ns)
+        ix.Indexador(db).ejecutar()
+
+        origenes = dict((o, n) for o, n, _ in db.origenes())
+        self.assertIn(r"C:\Archivos de Outlook\buzon.pst", origenes)
+        self.assertEqual(origenes[r"C:\Respaldos\archivo2019.pst"], 1)
+
+        r = db.buscar(texto="archivo viejo")
+        self.assertEqual(db.por_id(r[0]["id"])["origen"],
+                         r"C:\Respaldos\archivo2019.pst")
+        db.cerrar()
+
+    def test_la_ruta_conserva_mayusculas_y_minusculas(self):
+        """normcase solo sirve para comparar; al mostrarla debe verse igual."""
+        t = FakeFolder("Buzón", archivo=r"C:\Users\Isai\Documents\Archivos de Outlook\B.pst")
+        self.assertEqual(ix.ruta_archivo(t),
+                         r"C:\Users\Isai\Documents\Archivos de Outlook\B.pst")
+
+
 class MontarPstTests(unittest.TestCase):
     """Montar un .pst en Outlook en vez de depender de libpff."""
 

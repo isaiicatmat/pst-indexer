@@ -95,16 +95,23 @@ class BaseCorreos:
                 asunto        TEXT NOT NULL DEFAULT '',
                 cuerpo        TEXT NOT NULL DEFAULT '',
                 fecha         TEXT NOT NULL DEFAULT '',
+                origen        TEXT NOT NULL DEFAULT '',
                 adjuntos      INTEGER NOT NULL DEFAULT 0,
                 indexado      TEXT NOT NULL DEFAULT ''
             )
         """)
         c.execute("CREATE INDEX IF NOT EXISTS ix_fecha ON correos(fecha DESC)")
         c.execute("CREATE INDEX IF NOT EXISTS ix_carpeta ON correos(carpeta)")
+        columnas = {f[1] for f in c.execute("PRAGMA table_info(correos)").fetchall()}
+        if "origen" not in columnas:      # base creada por una version anterior
+            c.execute("ALTER TABLE correos ADD COLUMN origen TEXT NOT NULL DEFAULT ''")
         c.execute("CREATE TABLE IF NOT EXISTS meta (clave TEXT PRIMARY KEY, valor TEXT)")
         c.execute("INSERT OR REPLACE INTO meta VALUES ('esquema', ?)", (str(ESQUEMA_VERSION),))
 
         if self.fts:
+            fts_ya_existia = c.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='correos_fts'"
+            ).fetchone() is not None
             c.execute("""
                 CREATE VIRTUAL TABLE IF NOT EXISTS correos_fts USING fts5(
                     remitente, destinatarios, asunto, cuerpo,
@@ -128,6 +135,13 @@ class BaseCorreos:
                 END"""),
             ):
                 c.execute(f"CREATE TRIGGER IF NOT EXISTS {nombre} {cuerpo}")
+
+            # Los disparadores solo alcanzan a las filas nuevas: si la tabla de
+            # correos ya tenia contenido antes de existir el indice, esos correos
+            # quedarian fuera de la busqueda. Se construye el indice una vez.
+            if not fts_ya_existia:
+                if c.execute("SELECT 1 FROM correos LIMIT 1").fetchone():
+                    c.execute("INSERT INTO correos_fts(correos_fts) VALUES ('rebuild')")
         self.con.commit()
 
     # ---------------------------------------------------------------- escritura
@@ -140,16 +154,18 @@ class BaseCorreos:
         ahora = datetime.now().isoformat(timespec="seconds")
         filas = [(c.get("entry_id"), c.get("carpeta", ""), c.get("remitente", ""),
                   c.get("correo_rem", ""), c.get("destinatarios", ""), c.get("asunto", ""),
-                  c.get("cuerpo", ""), c.get("fecha", ""), int(c.get("adjuntos", 0)), ahora)
+                  c.get("cuerpo", ""), c.get("fecha", ""), c.get("origen", ""),
+                  int(c.get("adjuntos", 0)), ahora)
                  for c in correos]
         self.con.executemany("""
             INSERT INTO correos (entry_id, carpeta, remitente, correo_rem, destinatarios,
-                                 asunto, cuerpo, fecha, adjuntos, indexado)
-            VALUES (?,?,?,?,?,?,?,?,?,?)
+                                 asunto, cuerpo, fecha, origen, adjuntos, indexado)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(entry_id) DO UPDATE SET
                 carpeta=excluded.carpeta, remitente=excluded.remitente,
                 correo_rem=excluded.correo_rem, destinatarios=excluded.destinatarios,
                 asunto=excluded.asunto, cuerpo=excluded.cuerpo, fecha=excluded.fecha,
+                origen=excluded.origen,
                 adjuntos=excluded.adjuntos, indexado=excluded.indexado
         """, filas)
         self.con.commit()
@@ -190,6 +206,13 @@ class BaseCorreos:
         cur = self.con.execute(
             "SELECT carpeta, COUNT(*) n FROM correos GROUP BY carpeta ORDER BY n DESC")
         return [(f["carpeta"], f["n"]) for f in cur.fetchall()]
+
+    def origenes(self):
+        """De que archivos salieron los correos, con cuantos aporto cada uno."""
+        cur = self.con.execute(
+            "SELECT origen, COUNT(*) n, MAX(indexado) ultima FROM correos "
+            "GROUP BY origen ORDER BY n DESC")
+        return [(f["origen"], f["n"], f["ultima"]) for f in cur.fetchall()]
 
     def por_id(self, cid):
         f = self.con.execute("SELECT * FROM correos WHERE id=?", (cid,)).fetchone()

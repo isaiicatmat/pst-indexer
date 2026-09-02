@@ -252,6 +252,7 @@ class Ventana(QMainWindow):
         menu = QMenu(self)
         menu.addAction("Vaciar el índice y empezar de cero", self.vaciar_indice)
         menu.addSeparator()
+        menu.addAction("Ver de dónde vienen los correos", self.mostrar_origenes)
         menu.addAction("Ver dónde se guardan los datos", self.mostrar_carpeta_datos)
         self.btn_opciones.setMenu(menu)
 
@@ -596,7 +597,10 @@ class Ventana(QMainWindow):
             f"<div style='color:{C_SUAVE};font-size:12px;margin-top:6px'>"
             f"<b>De:</b> {rem}<br>"
             f"<b>Para:</b> {para}<br>"
-            f"{fecha_amable(c['fecha'])}  ·  {_html.escape(c['carpeta'] or '-')}{adj}</div>")
+            f"{fecha_amable(c['fecha'])}  ·  {_html.escape(c['carpeta'] or '-')}{adj}"
+            + (f"<br><span style='font-size:11px'>Archivo: "
+               f"{_html.escape(c.get('origen') or '')}</span>" if c.get("origen") else "")
+            + "</div>")
 
         texto = c["cuerpo"] or ""
         if texto.strip():
@@ -675,6 +679,29 @@ class Ventana(QMainWindow):
         self._refrescar_estado()
         self._modo_vacio(True)
         self._nota("Índice vaciado. Pulsa «Actualizar correos» para reconstruirlo.")
+
+    def mostrar_origenes(self):
+        """De que archivo de Outlook salio cada correo."""
+        filas = self.base.origenes()
+        if not filas:
+            QMessageBox.information(self, APP, "Todavía no hay correos indexados.")
+            return
+        partes = []
+        for origen, n, ultima in filas:
+            cuando = (ultima or "").replace("T", " ")[:16]
+            plural = "correo" if n == 1 else "correos"
+            if origen:
+                partes.append(f"{origen}\n     {n:,} {plural}".replace(",", " ")
+                              + (f"   ·   leído el {cuando}" if cuando else ""))
+            else:
+                partes.append(
+                    f"(sin registrar)\n     {n:,} {plural}".replace(",", " ")
+                    + "\n     Se indexaron con una versión anterior que no guardaba "
+                      "el archivo de origen.\n     Pulsa «Actualizar correos» para completarlo.")
+        QMessageBox.information(
+            self, APP,
+            "Los correos indexados salieron de estos archivos de Outlook:\n\n"
+            + "\n\n".join(partes))
 
     def mostrar_carpeta_datos(self):
         carpeta = os.path.dirname(os.path.abspath(self.ruta_db))
