@@ -2,6 +2,7 @@
 """Ejecuta TODAS las pruebas del sistema.  python probar_todo.py"""
 import os, sys, unittest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+os.environ.setdefault("QT_LOGGING_RULES", "qt.qpa.*=false")
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception:

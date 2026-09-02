@@ -17,6 +17,9 @@ Lo que falta verificar es exactamente lo que no se puede probar sin Windows:
 
 ## Pasos
 
+Si usas PowerShell, los `.bat` necesitan el prefijo `.\` (`.\crear_ejecutable.bat`);
+en `cmd.exe` no hace falta.
+
 ```bat
 python -m pip install -r requirements.txt
 python verificar.py

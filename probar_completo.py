@@ -5,6 +5,19 @@ import os, sys, tempfile, unittest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5.QtWidgets import QApplication
+
+# Qt en modo sin ventana avisa de fuentes que no encuentra, cientos de veces.
+# No afecta a la aplicacion real: solo ensucia el reporte de las pruebas.
+def _silenciar_qt(tipo, contexto, mensaje):
+    ruido = ("qfontdatabase", "cannot find font", "qt.qpa", "populating font")
+    if any(r in str(mensaje).lower() for r in ruido):
+        return
+    sys.stderr.write(str(mensaje) + "\n")
+
+
+from PyQt5.QtCore import qInstallMessageHandler
+qInstallMessageHandler(_silenciar_qt)
+
 from PyQt5.QtCore import Qt, QElapsedTimer
 
 import indexador_outlook as ix

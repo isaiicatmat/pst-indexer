@@ -259,22 +259,42 @@ class CarpetaDatosTests(unittest.TestCase):
                 _s.frozen = viejo_frozen
 
     def test_carpeta_de_solo_lectura_cae_a_datos_del_usuario(self):
-        import sys as _s, tempfile, stat
+        """Si no se puede escribir junto al .exe, la base va a la carpeta del usuario.
+
+        No se usa chmod: en Windows el bit de solo lectura no impide crear
+        archivos dentro de una carpeta, asi que la prueba pasaba por casualidad
+        en Mac y fallaba en Windows. Se simula el fallo de escritura, que es la
+        condicion que de verdad importa.
+        """
+        import sys as _s, tempfile
+        from unittest import mock
         d = tempfile.mkdtemp()
-        exe = os.path.join(d, "app.exe")
+        exe = os.path.join(d, "BuscadorCorreos.exe")
         with open(exe, "wb") as f:
             f.write(b"MZ")
+
+        real_open = open
+
+        def open_que_falla(archivo, *a, **k):
+            if str(archivo).endswith(".prueba_escritura"):
+                raise OSError(13, "Permission denied")
+            return real_open(archivo, *a, **k)
+
         viejo_frozen = getattr(_s, "frozen", None)
         viejo_exe = _s.executable
-        os.chmod(d, stat.S_IREAD | stat.S_IEXEC)
         try:
             _s.frozen = True
             _s.executable = exe
-            destino = carpeta_datos()
-            self.assertNotEqual(destino, d, "no debe intentar escribir donde no puede")
+            with mock.patch("builtins.open", open_que_falla):
+                destino = carpeta_datos()
+            self.assertNotEqual(destino, d, "no debe usar una carpeta donde no puede escribir")
             self.assertTrue(os.path.isdir(destino))
+            # y debe poder escribir de verdad en el destino elegido
+            prueba = os.path.join(destino, ".comprobacion")
+            with open(prueba, "w") as f:
+                f.write("x")
+            os.remove(prueba)
         finally:
-            os.chmod(d, stat.S_IRWXU)
             _s.executable = viejo_exe
             if viejo_frozen is None:
                 del _s.frozen

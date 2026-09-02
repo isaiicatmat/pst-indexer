@@ -91,3 +91,14 @@ Ejecutar las pruebas:
 ```
 python probar_todo.py
 ```
+
+### Ejecutar los .bat desde PowerShell
+
+PowerShell no ejecuta programas de la carpeta actual sin indicarlo. Hay que
+anteponer `.\`:
+
+```
+.\crear_ejecutable.bat
+```
+
+En `cmd.exe` funciona sin el prefijo. Desde el Explorador, doble clic.
