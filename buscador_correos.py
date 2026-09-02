@@ -14,10 +14,12 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLineEdit,
     QPushButton, QLabel, QListWidget, QListWidgetItem, QStyledItemDelegate,
     QStyle, QTextBrowser, QSplitter, QFrame, QMessageBox, QProgressDialog,
-    QDateEdit, QComboBox, QToolButton, QSizePolicy, QStackedWidget, QShortcut)
+    QDateEdit, QComboBox, QToolButton, QSizePolicy, QStackedWidget, QShortcut,
+    QFileDialog)
 
 from motor_busqueda import BaseCorreos, importar_base_antigua
-from indexador_outlook import Indexador, outlook_disponible
+from indexador_outlook import (Indexador, outlook_disponible,
+                               montar_pst, desmontar_pst)
 
 APP = "Buscador de Correos"
 MESES = ["ene", "feb", "mar", "abr", "may", "jun",
@@ -189,6 +191,14 @@ class Ventana(QMainWindow):
         self.btn_actualizar.setCursor(Qt.PointingHandCursor)
         self.btn_actualizar.setToolTip("Lee Outlook y trae los correos nuevos (F5)")
         self.btn_actualizar.clicked.connect(self.actualizar_correos)
+
+        self.btn_pst = QPushButton("Añadir archivo .pst")
+        self.btn_pst.setObjectName("secundario")
+        self.btn_pst.setCursor(Qt.PointingHandCursor)
+        self.btn_pst.setToolTip("Para buscar dentro de un archivo .pst archivado "
+                                "que no está abierto en Outlook")
+        self.btn_pst.clicked.connect(self.agregar_pst)
+        h.addWidget(self.btn_pst)
         h.addWidget(self.btn_actualizar)
         return b
 
@@ -322,7 +332,12 @@ class Ventana(QMainWindow):
         b.setObjectName("primario"); b.setCursor(Qt.PointingHandCursor)
         b.setMinimumHeight(42); b.setMaximumWidth(280)
         b.clicked.connect(self.actualizar_correos)
+        b2 = QPushButton("…o abrir un archivo .pst archivado")
+        b2.setObjectName("secundario"); b2.setCursor(Qt.PointingHandCursor)
+        b2.setMaximumWidth(280); b2.setMinimumHeight(38)
+        b2.clicked.connect(self.agregar_pst)
         v.addWidget(t); v.addWidget(s); v.addWidget(b, 0, Qt.AlignCenter)
+        v.addWidget(b2, 0, Qt.AlignCenter)
         return w
 
     # ---------------------------------------------------------------- arranque
@@ -519,6 +534,48 @@ class Ventana(QMainWindow):
                                 f"No se pudo abrir el correo en Outlook.\n\nDetalle: {e}")
 
     # ---------------------------------------------------------------- indexar
+    def agregar_pst(self):
+        """Abre un .pst archivado dentro de Outlook y lo indexa.
+        Se usa el propio Outlook como lector: no hace falta nada mas."""
+        ok, motivo = outlook_disponible()
+        if not ok:
+            QMessageBox.information(self, APP, motivo)
+            return
+
+        ruta, _ = QFileDialog.getOpenFileName(
+            self, "Elige el archivo .pst", "", "Archivos de Outlook (*.pst)")
+        if not ruta:
+            return
+
+        mb = os.path.getsize(ruta) / 1024 / 1024 if os.path.exists(ruta) else 0
+        r = QMessageBox.question(
+            self, APP,
+            f"Se va a abrir este archivo dentro de Outlook para poder leerlo:\n\n"
+            f"{os.path.basename(ruta)}  ({mb:,.0f} MB)\n\n"
+            "Aparecerá en tu lista de carpetas de Outlook, igual que si lo "
+            "abrieras con Archivo > Abrir. No se modifica ni se mueve nada, y "
+            "puedes quitarlo después desde Outlook.\n\n¿Continuar?"
+            .replace(",", " "),
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+        if r != QMessageBox.Yes:
+            return
+
+        try:
+            import pythoncom, win32com.client
+            try:
+                pythoncom.CoInitialize()
+            except Exception:
+                pass
+            ns = win32com.client.Dispatch("Outlook.Application").GetNamespace("MAPI")
+            ya_estaba, nombre = montar_pst(ns, ruta)
+        except Exception as e:
+            QMessageBox.warning(self, APP, str(e))
+            return
+
+        self._nota(f"Archivo «{nombre}» "
+                   + ("ya estaba abierto en Outlook." if ya_estaba else "abierto en Outlook."))
+        self.actualizar_correos()
+
     def actualizar_correos(self):
         if self.hilo and self.hilo.isRunning():
             return
@@ -535,6 +592,7 @@ class Ventana(QMainWindow):
         self.dialogo.setAutoClose(False)
         self.dialogo.setAutoReset(False)
         self.btn_actualizar.setEnabled(False)
+        self.btn_pst.setEnabled(False)
         self._cerrando_indexado = False
 
         self.hilo = HiloIndexado(self.ruta_db, solo_nuevos=True)
@@ -565,6 +623,7 @@ class Ventana(QMainWindow):
         if self.dialogo:
             self.dialogo.close(); self.dialogo = None
         self.btn_actualizar.setEnabled(True)
+        self.btn_pst.setEnabled(True)
         if error:
             QMessageBox.warning(self, APP, f"No se pudo completar la actualización.\n\n{error}")
         self.base = BaseCorreos(self.ruta_db)   # reabrir para ver lo que escribió el hilo

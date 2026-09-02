@@ -44,12 +44,28 @@ class FakeItems:
         self._p += 1
         return self._i[self._p] if self._p < len(self._i) else None
 
+class FakeStore:
+    def __init__(self, ruta): self.FilePath = ruta
+
 class FakeFolder:
-    def __init__(self, nombre, items=(), sub=()):
+    def __init__(self, nombre, items=(), sub=(), archivo=None):
         self.Name = nombre; self.Items = FakeItems(items); self.Folders = list(sub)
+        self.Store = FakeStore(archivo) if archivo else None
 
 class FakeNS:
+    """Simula AddStoreEx/RemoveStore de Outlook."""
     def __init__(self, folders): self.Folders = folders
+    def AddStoreEx(self, ruta, tipo):
+        if str(ruta).lower().endswith("roto.pst"):
+            raise Exception("el archivo esta danado")
+        self.Folders.append(FakeFolder(
+            os.path.basename(str(ruta)),
+            sub=[FakeFolder("Bandeja de entrada", [
+                FakeItem("P1", "Correo archivado 2019", "Cliente Viejo", "viejo@x.com",
+                         body="Contenido dentro del PST archivado.")])],
+            archivo=str(ruta)))
+    def RemoveStore(self, carpeta):
+        self.Folders.remove(carpeta)
 class FakeApp:
     def __init__(self, ns): self._ns = ns
     def GetNamespace(self, _): return self._ns
@@ -225,6 +241,70 @@ class IndexadorTests(unittest.TestCase):
         with self.assertRaises(RuntimeError) as e:
             ix.Indexador(self.db).ejecutar()
         self.assertIn("Windows", str(e.exception))
+
+
+class MontarPstTests(unittest.TestCase):
+    """Montar un .pst en Outlook en vez de depender de libpff."""
+
+    def setUp(self):
+        self.ns = outlook_de_prueba()
+        instalar_falso(self.ns)
+        self.dir = tempfile.mkdtemp()
+        self.pst = os.path.join(self.dir, "archivo_2019.pst")
+        with open(self.pst, "wb") as f: f.write(b"!BDN" + b"\0" * 600)
+        self.ruta = tempfile.mktemp(suffix=".db")
+        self.db = BaseCorreos(self.ruta)
+
+    def tearDown(self):
+        self.db.cerrar()
+        for s in ("", "-wal", "-shm"):
+            try: os.remove(self.ruta + s)
+            except OSError: pass
+
+    def test_01_monta_un_pst_no_abierto(self):
+        estaba, nombre = ix.montar_pst(self.ns, self.pst)
+        self.assertFalse(estaba, "no estaba montado antes")
+        self.assertEqual(nombre, "archivo_2019.pst")
+        self.assertIn(os.path.normcase(self.pst), ix.pst_montados(self.ns))
+
+    def test_02_montar_dos_veces_no_duplica(self):
+        ix.montar_pst(self.ns, self.pst)
+        antes = len(self.ns.Folders)
+        estaba, _ = ix.montar_pst(self.ns, self.pst)
+        self.assertTrue(estaba, "debe avisar que ya estaba montado")
+        self.assertEqual(len(self.ns.Folders), antes)
+
+    def test_03_su_contenido_se_indexa(self):
+        ix.montar_pst(self.ns, self.pst)
+        ix.Indexador(self.db).ejecutar()
+        r = self.db.buscar(texto="PST archivado")
+        self.assertEqual(len(r), 1)
+        self.assertIn("Contenido dentro del PST", self.db.por_id(r[0]["id"])["cuerpo"])
+
+    def test_04_desmontar_no_borra_el_archivo(self):
+        ix.montar_pst(self.ns, self.pst)
+        self.assertTrue(ix.desmontar_pst(self.ns, self.pst))
+        self.assertNotIn(os.path.normcase(self.pst), ix.pst_montados(self.ns))
+        self.assertTrue(os.path.exists(self.pst), "el .pst debe seguir en el disco")
+
+    def test_05_archivo_inexistente(self):
+        with self.assertRaises(RuntimeError) as e:
+            ix.montar_pst(self.ns, os.path.join(self.dir, "no_existe.pst"))
+        self.assertIn("No existe", str(e.exception))
+
+    def test_06_extension_incorrecta(self):
+        otro = os.path.join(self.dir, "cosa.txt")
+        with open(otro, "w") as f: f.write("x")
+        with self.assertRaises(RuntimeError) as e:
+            ix.montar_pst(self.ns, otro)
+        self.assertIn(".pst", str(e.exception))
+
+    def test_07_archivo_danado_da_mensaje_util(self):
+        roto = os.path.join(self.dir, "roto.pst")
+        with open(roto, "wb") as f: f.write(b"basura")
+        with self.assertRaises(RuntimeError) as e:
+            ix.montar_pst(self.ns, roto)
+        self.assertIn("Outlook no pudo abrir", str(e.exception))
 
 
 if __name__ == "__main__":

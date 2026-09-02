@@ -2,6 +2,7 @@
 Lee los correos de Outlook y los guarda en la base de datos.
 Recorre TODAS las carpetas (incluidas subcarpetas) y extrae el cuerpo completo.
 """
+import os
 import re
 import sys
 from datetime import datetime
@@ -148,6 +149,69 @@ def _recolectar_carpetas(carpetas, acumulado, ruta=""):
         except Exception:
             pass
     return acumulado
+
+
+OL_UNICODE = 3          # olStoreUnicode
+
+
+def _ruta_de(tienda):
+    try:
+        return os.path.normcase(os.path.abspath(str(tienda.Store.FilePath or "")))
+    except Exception:
+        return ""
+
+
+def pst_montados(ns):
+    """Rutas de los archivos .pst que Outlook tiene abiertos ahora mismo."""
+    rutas = {}
+    for t in ns.Folders:
+        r = _ruta_de(t)
+        if r:
+            rutas[r] = t
+    return rutas
+
+
+def montar_pst(ns, ruta):
+    """Abre un archivo .pst dentro de Outlook para poder leerlo.
+    Es lo mismo que hacer Archivo > Abrir > Archivo de datos de Outlook.
+    Devuelve (ya_estaba_montado, nombre_del_almacen)."""
+    ruta = os.path.abspath(ruta)
+    if not os.path.exists(ruta):
+        raise RuntimeError(f"No existe el archivo:\n{ruta}")
+    if not ruta.lower().endswith(".pst"):
+        raise RuntimeError("El archivo debe tener extensión .pst")
+
+    clave = os.path.normcase(ruta)
+    montados = pst_montados(ns)
+    if clave in montados:
+        return True, str(montados[clave].Name)
+
+    try:
+        ns.AddStoreEx(ruta, OL_UNICODE)
+    except Exception as e:
+        raise RuntimeError(
+            "Outlook no pudo abrir el archivo.\n\n"
+            "Suele deberse a que otro programa lo tiene en uso, a que está en "
+            "una carpeta protegida, o a que el archivo está dañado.\n\n"
+            f"Detalle: {e}")
+
+    nuevos = pst_montados(ns)
+    if clave not in nuevos:
+        raise RuntimeError("Outlook aceptó el archivo pero no aparece en la lista.")
+    return False, str(nuevos[clave].Name)
+
+
+def desmontar_pst(ns, ruta):
+    """Cierra el .pst en Outlook. No borra nada del disco."""
+    clave = os.path.normcase(os.path.abspath(ruta))
+    montados = pst_montados(ns)
+    if clave not in montados:
+        return False
+    try:
+        ns.RemoveStore(montados[clave])
+        return True
+    except Exception:
+        return False
 
 
 class Indexador:

@@ -193,6 +193,58 @@ class InterfazTests(unittest.TestCase):
         p.end()
 
 
+class BotonPstTests(unittest.TestCase):
+    """El boton para abrir un .pst archivado."""
+
+    def setUp(self):
+        self.ruta = tempfile.mktemp(suffix=".db")
+        db = BaseCorreos(self.ruta); db.guardar(DATOS); db.cerrar()
+        self.v = bc.Ventana(self.ruta); self.v.show(); app.processEvents()
+
+    def tearDown(self):
+        self.v.base.cerrar()
+        for s in ("", "-wal", "-shm"):
+            try: os.remove(self.ruta + s)
+            except OSError: pass
+
+    def test_existe_y_explica_para_que_sirve(self):
+        self.assertTrue(self.v.btn_pst.isVisible())
+        self.assertIn(".pst", self.v.btn_pst.text())
+        self.assertIn("archivado", self.v.btn_pst.toolTip())
+
+    def test_sin_outlook_avisa_y_no_abre_selector(self):
+        """En una maquina sin Outlook debe explicarlo, no fallar en silencio."""
+        from PyQt5.QtWidgets import QMessageBox, QFileDialog
+        avisos, abierto = [], []
+        oi, og = QMessageBox.information, QFileDialog.getOpenFileName
+        QMessageBox.information = staticmethod(lambda p, t, m, *a, **k: avisos.append(m))
+        QFileDialog.getOpenFileName = staticmethod(
+            lambda *a, **k: abierto.append(1) or ("", ""))
+        try:
+            bc.outlook_disponible = lambda: (False, "Esta función necesita Windows con Outlook instalado.")
+            self.v.agregar_pst()
+            self.assertEqual(len(avisos), 1)
+            self.assertIn("Windows", avisos[0])
+            self.assertEqual(abierto, [], "no debe abrir el selector de archivos")
+        finally:
+            QMessageBox.information = oi
+            QFileDialog.getOpenFileName = og
+
+    def test_cancelar_el_selector_no_hace_nada(self):
+        from PyQt5.QtWidgets import QFileDialog
+        og = QFileDialog.getOpenFileName
+        QFileDialog.getOpenFileName = staticmethod(lambda *a, **k: ("", ""))
+        try:
+            bc.outlook_disponible = lambda: (True, "")
+            self.v.agregar_pst()          # no debe lanzar nada
+        finally:
+            QFileDialog.getOpenFileName = og
+            bc.outlook_disponible = lambda: (False, "sin Outlook")
+
+    def test_se_deshabilita_mientras_indexa(self):
+        self.assertTrue(self.v.btn_pst.isEnabled())
+
+
 class CierreTests(unittest.TestCase):
     def test_cerrar_con_busqueda_pendiente_no_truena(self):
         """El temporizador de busqueda no debe dispararse sobre una base cerrada."""

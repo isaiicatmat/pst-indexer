@@ -30,6 +30,23 @@ python inspeccionar_pst.py "C:\Users\Isai\Documents\Indexer\pst-file"
   su tamaño y **si Outlook ya lo tiene montado**. De eso depende si hace falta
   añadir lectura directa con `libpff`.
 
+## El PST de prueba
+
+El archivo `isai.carreto@pieconsulting.co.kr.pst` (3 GB, UNICODE) **no está
+montado** en Outlook: el que Outlook tiene abierto es otra copia, en
+`Documents\Archivos de Outlook`.
+
+Se descartó `libpff` porque solo publica ruedas precompiladas para macOS; en
+Windows habría que compilar C con Visual C++ Build Tools. En su lugar la app
+usa el propio Outlook como lector: el botón **«Añadir archivo .pst»** lo abre
+con `AddStoreEx`, igual que Archivo > Abrir > Archivo de datos de Outlook.
+
+Al probarlo hay que anotar **cuánto tarda** en indexar los 3 GB. Si la segunda
+pasada resulta lenta, el siguiente paso sería filtrar por fecha con
+`Items.Restrict` en lugar de recorrer todo. No se hizo por adelantado porque el
+formato de fecha de `Restrict` depende del idioma de Windows y es una fuente
+conocida de errores: primero conviene medir.
+
 Después, la prueba de verdad:
 
 ```bat
