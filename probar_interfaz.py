@@ -1,0 +1,213 @@
+"""Pruebas de la interfaz sin abrir ventana (modo offscreen).
+Ejecuta:  python probar_interfaz.py"""
+import os, sys, tempfile, unittest
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+from PyQt5.QtWidgets import QApplication
+from PyQt5.QtCore import Qt
+from motor_busqueda import BaseCorreos
+import buscador_correos as bc
+
+app = QApplication.instance() or QApplication(sys.argv)
+
+LARGO_REM = "Departamento de Administracion y Finanzas Corporativas Region Norte SA de CV"
+LARGO_ASU = ("Notificacion automatica del sistema de gestion documental sobre el "
+             "expediente 99887766 con acuse de recibo y confirmacion de lectura")
+
+DATOS = [
+    dict(entry_id="A1", carpeta="Bandeja de entrada", remitente="María Gómez",
+         correo_rem="maria@empresa.com", destinatarios="isai@empresa.com",
+         asunto="Factura 4471 pendiente", cuerpo="El monto es de $12,450 MXN.",
+         fecha="2024-03-15 10:23:45", adjuntos=1),
+    dict(entry_id="A2", carpeta="Elementos enviados", remitente="Isai Carreto",
+         correo_rem="isai@empresa.com", destinatarios="maria@empresa.com",
+         asunto="Confirmacion de pago", cuerpo="Adjunto comprobante del pago.",
+         fecha="2024-03-16 14:05:00", adjuntos=2),
+    dict(entry_id="A3", carpeta="Proyectos/Norte", remitente=LARGO_REM,
+         correo_rem="admin@x.com", destinatarios="isai@empresa.com", asunto=LARGO_ASU,
+         cuerpo="CONTENIDO LARGO QUE DEBE VERSE COMPLETO", fecha="2024-07-01 09:00:00",
+         adjuntos=0),
+    dict(entry_id="A4", carpeta="Bandeja de entrada", remitente="Boletin",
+         correo_rem="n@b.com", destinatarios="isai@empresa.com", asunto="Solo imagen",
+         cuerpo="", fecha="2024-08-01 07:00:00", adjuntos=0),
+]
+
+
+class InterfazTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.ruta = tempfile.mktemp(suffix=".db")
+        db = BaseCorreos(cls.ruta); db.guardar(DATOS); db.cerrar()
+        cls.v = bc.Ventana(cls.ruta)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.v.base.cerrar()
+        for s in ("", "-wal", "-shm"):
+            try: os.remove(cls.ruta + s)
+            except OSError: pass
+
+    def _buscar(self, texto):
+        self.v.caja.setText(texto)
+        self.v.buscar()
+        app.processEvents()
+
+    def test_01_abre_con_correos(self):
+        self.assertEqual(self.v.pilas.currentIndex(), 0, "debe mostrar la lista, no el estado vacio")
+        self.assertEqual(self.v.lista.count(), 4)
+
+    def test_02_selecciona_el_primero_solo(self):
+        self.assertEqual(self.v.lista.currentRow(), 0)
+        self.assertTrue(self.v.cabecera.text(), "la cabecera debe llenarse sola")
+
+    def test_03_el_contenido_se_ve_sin_doble_clic(self):
+        """Requisito: el contenido de los correos se ve."""
+        self._buscar("factura")
+        self.assertGreaterEqual(self.v.lista.count(), 1)
+        self.assertIn("12,450", self.v.cuerpo.toPlainText())
+
+    def test_04_BUG1_remitente_y_asunto_largos(self):
+        """El bug original: con textos largos el detalle salia vacio."""
+        self._buscar("99887766")
+        self.assertEqual(self.v.lista.count(), 1)
+        texto = self.v.cuerpo.toPlainText()
+        self.assertIn("CONTENIDO LARGO QUE DEBE VERSE COMPLETO", texto)
+        self.assertNotIn("Sin contenido", texto)
+
+    def test_05_resaltado_de_terminos(self):
+        self._buscar("comprobante")
+        h = self.v.cuerpo.toHtml().lower()
+        self.assertIn("ffe9a8", h, "el termino buscado debe aparecer resaltado")
+        # y el resaltado debe caer sobre la palabra buscada, no en otro lado
+        i = h.find("ffe9a8")
+        self.assertIn("comprobante", h[i:i+220])
+
+    def test_06_correo_sin_cuerpo_explica_que_hacer(self):
+        self._buscar("Solo imagen")
+        t = self.v.cuerpo.toPlainText()
+        self.assertIn("no tiene texto guardado", t)
+        self.assertIn("Abrir en Outlook", t)
+
+    def test_07_navegar_con_flechas_cambia_el_contenido(self):
+        self._buscar("")
+        self.v.lista.setCurrentRow(0); app.processEvents()
+        primero = self.v.cuerpo.toPlainText()
+        self.v.lista.setCurrentRow(1); app.processEvents()
+        self.assertNotEqual(primero, self.v.cuerpo.toPlainText())
+
+    def test_08_cada_fila_muestra_su_propio_contenido(self):
+        """Recorre TODOS los resultados y verifica que el cuerpo coincide."""
+        self._buscar("")
+        for fila in range(self.v.lista.count()):
+            self.v.lista.setCurrentRow(fila); app.processEvents()
+            d = self.v.lista.item(fila).data(Qt.UserRole)
+            esperado = self.v.base.por_id(d["id"])
+            self.assertIn(esperado["asunto"][:30], self.v.cabecera.text())
+            if esperado["cuerpo"]:
+                self.assertIn(esperado["cuerpo"][:25], self.v.cuerpo.toPlainText())
+
+    def test_08b_correo_del_remitente_sin_entidades_html(self):
+        """La direccion debe verse como <correo>, no como &lt;correo&gt;."""
+        self._buscar("factura")
+        self.v.lista.setCurrentRow(0)
+        app.processEvents()
+        origen = self.v.cabecera.text()
+        self.assertNotIn("&amp;lt;", origen, "doble escapado: se veria '&lt;' literal")
+        self.assertIn("&lt;", origen, "la direccion debe ir entre < >")
+        # Lo que realmente ve el usuario, ya renderizado por Qt:
+        from PyQt5.QtGui import QTextDocument
+        doc = QTextDocument(); doc.setHtml(origen)
+        visible = doc.toPlainText()
+        self.assertIn("<maria@empresa.com>", visible)
+        self.assertNotIn("&lt;", visible)
+
+    def test_09_sin_resultados_da_instrucciones(self):
+        self._buscar("xyzabc123noexiste")
+        self.assertEqual(self.v.lista.count(), 0)
+        self.assertIn("Sin resultados", self.v.conteo.text())
+        self.assertIn("Actualizar correos", self.v.cuerpo.toPlainText())
+
+    def test_10_filtro_carpeta(self):
+        self._buscar("")
+        i = self.v.f_carpeta.findData("Elementos enviados")
+        self.assertGreater(i, 0, "la carpeta debe aparecer en el desplegable")
+        self.v.f_carpeta.setCurrentIndex(i); app.processEvents()
+        self.assertEqual(self.v.lista.count(), 1)
+        self.v.f_carpeta.setCurrentIndex(0); app.processEvents()
+
+    def test_11_filtro_remitente(self):
+        self._buscar("")
+        self.v.f_remitente.setText("maria"); self.v.buscar(); app.processEvents()
+        self.assertEqual(self.v.lista.count(), 1)
+        self.v.f_remitente.clear()
+
+    def test_12_limpiar_restaura_todo(self):
+        self.v.caja.setText("factura"); self.v.f_remitente.setText("maria")
+        self.v._limpiar(); app.processEvents()
+        self.assertEqual(self.v.caja.text(), "")
+        self.assertEqual(self.v.f_remitente.text(), "")
+        self.assertEqual(self.v.lista.count(), 4)
+
+    def test_13_teclear_no_truena_con_nada(self):
+        for basura in ['"', '((', '*', "'", "\\", "a OR", "NEAR(", "%$#", "ñ", "  "]:
+            self._buscar(basura)
+
+    def test_14_barra_de_estado_informa_cobertura(self):
+        self.v._refrescar_estado()
+        t = self.v.estado.text()
+        self.assertIn("indexados", t)
+        self.assertIn("con contenido legible", t)
+
+    def test_15_copiar_al_portapapeles(self):
+        self._buscar("factura")
+        self.v._copiar()
+        self.assertIn("12,450", QApplication.clipboard().text())
+
+    def test_16_estado_vacio_en_base_nueva(self):
+        ruta = tempfile.mktemp(suffix=".db")
+        v = bc.Ventana(ruta)
+        self.assertEqual(v.pilas.currentIndex(), 1, "base vacia -> pantalla de bienvenida")
+        v.base.cerrar()
+        for s in ("", "-wal", "-shm"):
+            try: os.remove(ruta + s)
+            except OSError: pass
+
+    def test_17_atajos_registrados(self):
+        from PyQt5.QtWidgets import QShortcut
+        teclas = {s.key().toString() for s in self.v.findChildren(QShortcut)}
+        for k in ("Ctrl+F", "Esc", "F5"):
+            self.assertTrue(any(k in t for t in teclas), f"falta el atajo {k}: {teclas}")
+
+    def test_18_render_de_la_lista_no_truena(self):
+        """Dibuja de verdad los items con el delegado."""
+        from PyQt5.QtGui import QPixmap, QPainter
+        from PyQt5.QtWidgets import QStyleOptionViewItem
+        self._buscar("")
+        d = self.v.lista.itemDelegate()
+        px = QPixmap(460, 76); px.fill()
+        p = QPainter(px)
+        for fila in range(self.v.lista.count()):
+            o = QStyleOptionViewItem()
+            o.rect = px.rect(); o.font = self.v.font()
+            d.paint(p, o, self.v.lista.model().index(fila, 0))
+        p.end()
+
+
+class CierreTests(unittest.TestCase):
+    def test_cerrar_con_busqueda_pendiente_no_truena(self):
+        """El temporizador de busqueda no debe dispararse sobre una base cerrada."""
+        from PyQt5.QtGui import QCloseEvent
+        ruta = tempfile.mktemp(suffix=".db")
+        db = BaseCorreos(ruta); db.guardar(DATOS); db.cerrar()
+        v = bc.Ventana(ruta); v.show(); app.processEvents()
+        v.caja.setText("fact")          # deja el temporizador armado
+        v.closeEvent(QCloseEvent())     # el usuario cierra antes de los 250 ms
+        v.temporizador.timeout.emit()   # el temporizador intenta dispararse
+        app.processEvents()
+        for s_ in ("", "-wal", "-shm"):
+            try: os.remove(ruta + s_)
+            except OSError: pass
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
