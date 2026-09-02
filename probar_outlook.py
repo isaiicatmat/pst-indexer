@@ -243,6 +243,53 @@ class IndexadorTests(unittest.TestCase):
         self.assertIn("Windows", str(e.exception))
 
 
+class EtiquetaTiendaTests(unittest.TestCase):
+    """Dos .pst con el mismo nombre deben poder distinguirse."""
+
+    def _tienda(self, nombre, archivo=None):
+        return FakeFolder(nombre, archivo=archivo)
+
+    def test_un_solo_almacen_deja_el_nombre_limpio(self):
+        t = self._tienda("Buzón", r"C:\Datos\buzon.pst")
+        ns = FakeNS([t])
+        self.assertEqual(ix.etiqueta_tienda(t, ns), "Buzón")
+
+    def test_dos_iguales_se_distinguen_por_su_carpeta(self):
+        a = self._tienda("correo@x.com", r"C:\Users\I\Archivos de Outlook\correo.pst")
+        b = self._tienda("correo@x.com", r"C:\Users\I\Indexer\pst-file\correo.pst")
+        ns = FakeNS([a, b])
+        self.assertEqual(ix.etiqueta_tienda(a, ns), "correo@x.com (Archivos de Outlook)")
+        self.assertEqual(ix.etiqueta_tienda(b, ns), "correo@x.com (pst-file)")
+
+    def test_nombres_distintos_no_se_tocan(self):
+        a = self._tienda("Buzón principal", r"C:\a\uno.pst")
+        b = self._tienda("Archivo 2019", r"C:\b\dos.pst")
+        ns = FakeNS([a, b])
+        self.assertEqual(ix.etiqueta_tienda(a, ns), "Buzón principal")
+        self.assertEqual(ix.etiqueta_tienda(b, ns), "Archivo 2019")
+
+    def test_sin_ruta_de_archivo_no_truena(self):
+        a = self._tienda("Buzón"); b = self._tienda("Buzón")
+        ns = FakeNS([a, b])
+        self.assertEqual(ix.etiqueta_tienda(a, ns), "Buzón")
+
+    def test_las_carpetas_indexadas_llevan_la_etiqueta(self):
+        ruta = os.path.join(tempfile.mkdtemp(), "correos.db")
+        db = BaseCorreos(ruta)
+        ns = outlook_de_prueba()
+        ns.Folders.append(FakeFolder("Buzón - Isai", sub=[
+            FakeFolder("Bandeja de entrada", [
+                FakeItem("Z1", "Correo del archivo", body="viene de la copia")])],
+            archivo=r"C:\copia\buzon.pst"))
+        ns.Folders[0].Store = FakeStore(r"C:\principal\buzon.pst")
+        instalar_falso(ns)
+        ix.Indexador(db).ejecutar()
+        carpetas = {c for c, _ in db.carpetas()}
+        self.assertTrue(any("(principal)" in c for c in carpetas), carpetas)
+        self.assertTrue(any("(copia)" in c for c in carpetas), carpetas)
+        db.cerrar()
+
+
 class MontarPstTests(unittest.TestCase):
     """Montar un .pst en Outlook en vez de depender de libpff."""
 

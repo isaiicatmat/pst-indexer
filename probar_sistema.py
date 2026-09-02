@@ -179,7 +179,8 @@ class HtmlTests(unittest.TestCase):
 class MigracionTests(unittest.TestCase):
     def test_importa_base_vieja(self):
         import sqlite3
-        vieja = tempfile.mktemp(suffix=".db")
+        d = tempfile.mkdtemp()
+        vieja = os.path.join(d, "email_index.db")
         con = sqlite3.connect(vieja)
         con.execute("""CREATE TABLE emails (id INTEGER PRIMARY KEY, sender TEXT, recipient TEXT,
                        subject TEXT, body TEXT, date TEXT, pst_file TEXT, indexed_date TEXT)""")
@@ -189,7 +190,7 @@ class MigracionTests(unittest.TestCase):
                           "Outlook:Bandeja de entrada")])
         con.commit(); con.close()
 
-        nueva = tempfile.mktemp(suffix=".db")
+        nueva = os.path.join(d, "correos.db")
         db = BaseCorreos(nueva)
         n = importar_base_antigua(db, vieja)
         self.assertEqual(n, 1)
@@ -221,7 +222,7 @@ class MigracionTests(unittest.TestCase):
         b2.cerrar()
 
     def test_sin_base_vieja_no_truena(self):
-        db = BaseCorreos(tempfile.mktemp(suffix=".db"))
+        db = BaseCorreos(os.path.join(tempfile.mkdtemp(), "correos.db"))
         self.assertEqual(importar_base_antigua(db, "no_existe_12345.db"), 0)
         db.cerrar()
 

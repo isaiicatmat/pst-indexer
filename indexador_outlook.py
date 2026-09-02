@@ -171,6 +171,50 @@ def pst_montados(ns):
     return rutas
 
 
+def carpeta_contenedora(ruta):
+    """Nombre de la carpeta que contiene un archivo.
+
+    Se parte a mano por los dos separadores en vez de usar os.path, porque las
+    rutas vienen siempre de Windows aunque el codigo se pruebe en otro sistema.
+    """
+    if not ruta:
+        return ""
+    partes = [p for p in str(ruta).replace("\\", "/").split("/") if p]
+    return partes[-2] if len(partes) >= 2 else ""
+
+
+def etiqueta_tienda(tienda, ns=None):
+    """Nombre con el que se etiquetan las carpetas de un almacen.
+
+    Dos archivos .pst distintos pueden llamarse igual (por ejemplo el buzon y
+    una copia archivada). En ese caso se anade la carpeta que los contiene,
+    para poder distinguirlos. Si no hay colision, se deja el nombre limpio.
+    """
+    try:
+        nombre = str(tienda.Name)
+    except Exception:
+        return "Outlook"
+
+    if ns is not None:
+        iguales = 0
+        for t in ns.Folders:
+            try:
+                if str(t.Name) == nombre:
+                    iguales += 1
+            except Exception:
+                continue
+        if iguales <= 1:
+            return nombre
+
+    ruta = ""
+    try:
+        ruta = str(tienda.Store.FilePath or "")
+    except Exception:
+        pass
+    padre = carpeta_contenedora(ruta)
+    return f"{nombre} ({padre})" if padre else nombre
+
+
 def montar_pst(ns, ruta):
     """Abre un archivo .pst dentro de Outlook para poder leerlo.
     Es lo mismo que hacer Archivo > Abrir > Archivo de datos de Outlook.
@@ -248,7 +292,8 @@ class Indexador:
             carpetas = []
             for tienda in ns.Folders:
                 try:
-                    _recolectar_carpetas(tienda.Folders, carpetas, str(tienda.Name))
+                    _recolectar_carpetas(tienda.Folders, carpetas,
+                                         etiqueta_tienda(tienda, ns))
                 except Exception:
                     continue
             if not carpetas:

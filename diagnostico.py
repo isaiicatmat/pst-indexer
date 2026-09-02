@@ -10,8 +10,8 @@ except Exception:
     pass
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from motor_busqueda import BaseCorreos
-from indexador_outlook import CARPETAS_OMITIDAS, CLASE_CORREO, outlook_disponible
+from motor_busqueda import BaseCorreos, carpeta_datos
+from indexador_outlook import CARPETAS_OMITIDAS, etiqueta_tienda, outlook_disponible
 
 ok, motivo = outlook_disponible()
 if not ok:
@@ -24,107 +24,102 @@ import win32com.client
 pythoncom.CoInitialize()
 ns = win32com.client.Dispatch("Outlook.Application").GetNamespace("MAPI")
 
-print("\n" + "=" * 74)
+print("\n" + "=" * 78)
 print("  QUE HAY EN OUTLOOK  vs  QUE QUEDO INDEXADO")
-print("=" * 74)
-print("\n  Recorriendo Outlook (puede tardar un minuto)...\n")
+print("=" * 78)
 
 filas = []
 
 
-def recorrer(carpetas, ruta=""):
+def recorrer(carpetas, ruta):
     for c in carpetas:
         try:
             nombre = str(c.Name)
         except Exception:
             continue
-        completo = f"{ruta}/{nombre}" if ruta else nombre
+        completo = f"{ruta}/{nombre}"
         omitida = nombre.lower() in CARPETAS_OMITIDAS
-        total = correos = 0
         try:
-            total = int(c.Items.Count)
+            total = int(c.Items.Count)      # una sola llamada, sin recorrer
         except Exception:
-            pass
-        if total and not omitida:
-            try:
-                it = c.Items.GetFirst()
-                while it is not None:
-                    try:
-                        if int(it.Class) == CLASE_CORREO:
-                            correos += 1
-                    except Exception:
-                        pass
-                    it = c.Items.GetNext()
-            except Exception:
-                pass
-        filas.append((completo, total, correos, omitida))
-        etiqueta = "(omitida)" if omitida else f"{correos} correos"
-        corta = completo if len(completo) <= 52 else "..." + completo[-49:]
-        print(f"    {corta:<54} {etiqueta}")
-        sys.stdout.flush()
+            total = 0
+        filas.append((completo, total, omitida))
         try:
             recorrer(c.Folders, completo)
         except Exception:
             pass
 
 
+etiquetas = []
 for tienda in ns.Folders:
     try:
-        print(f"  ALMACEN: {tienda.Name}")
-        try:
-            print(f"           {tienda.Store.FilePath}")
-        except Exception:
-            pass
-        recorrer(tienda.Folders, str(tienda.Name))
-    except Exception as e:
-        print(f"  (no se pudo leer un almacen: {e})")
+        etiquetas.append((tienda, etiqueta_tienda(tienda, ns)))
+    except Exception:
+        pass
 
-db = os.path.join(os.path.dirname(os.path.abspath(__file__)), "correos.db")
-indexadas = {}
+for tienda, etiqueta in etiquetas:
+    ruta_archivo = ""
+    try:
+        ruta_archivo = str(tienda.Store.FilePath or "")
+    except Exception:
+        pass
+    print(f"\n  ALMACEN: {etiqueta}")
+    if ruta_archivo:
+        print(f"           {ruta_archivo}")
+    sys.stdout.flush()
+    try:
+        recorrer(tienda.Folders, etiqueta)
+    except Exception as e:
+        print(f"           (no se pudo recorrer: {e})")
+
+db = os.path.join(carpeta_datos(), "correos.db")
+indexadas, total_db, con_cuerpo = {}, 0, 0
 if os.path.exists(db):
     b = BaseCorreos(db)
     indexadas = dict(b.carpetas())
     total_db, con_cuerpo = b.total(), b.total_con_cuerpo()
     b.cerrar()
-else:
-    total_db = con_cuerpo = 0
 
-print(f"\n  {'CARPETA':<44} {'ELEMS':>7} {'CORREOS':>8} {'EN BASE':>8}")
-print("  " + "-" * 70)
+print(f"\n  {'CARPETA':<50} {'OUTLOOK':>9} {'INDEXADO':>9}")
+print("  " + "-" * 72)
 
-suma_correos = suma_base = 0
-faltantes = []
-for ruta, total, correos, omitida in filas:
-    corta = ruta if len(ruta) <= 43 else "..." + ruta[-40:]
+suma_out = suma_db = 0
+sospechosas = []
+for ruta, total, omitida in filas:
+    corta = ruta if len(ruta) <= 49 else "..." + ruta[-46:]
     if omitida:
-        print(f"  {corta:<44} {total:>7} {'(omitida)':>17}")
+        print(f"  {corta:<50} {total:>9} {'(omitida)':>9}")
         continue
     en_base = indexadas.get(ruta, 0)
-    suma_correos += correos
-    suma_base += en_base
-    marca = "" if en_base >= correos else "  <-- FALTAN"
-    if correos and en_base < correos:
-        faltantes.append((ruta, correos, en_base))
-    print(f"  {corta:<44} {total:>7} {correos:>8} {en_base:>8}{marca}")
+    suma_out += total
+    suma_db += en_base
+    marca = ""
+    if total and en_base == 0:
+        marca = "  <-- NADA INDEXADO"
+        sospechosas.append((ruta, total, en_base))
+    print(f"  {corta:<50} {total:>9} {en_base:>9}{marca}")
 
-print("  " + "-" * 70)
-print(f"  {'TOTAL':<44} {'':>7} {suma_correos:>8} {suma_base:>8}")
+print("  " + "-" * 72)
+print(f"  {'TOTAL':<50} {suma_out:>9} {suma_db:>9}")
+print("\n  OUTLOOK incluye citas, contactos y tareas; INDEXADO solo correos,")
+print("  asi que es normal que la primera columna sea algo mayor.")
 
-print(f"\n  Base de datos: {total_db} correos, {con_cuerpo} con contenido "
-      f"({100*con_cuerpo/total_db if total_db else 0:.0f}%)")
+pct = (100 * con_cuerpo / total_db) if total_db else 0
+print(f"\n  Base de datos: {total_db} correos, {con_cuerpo} con contenido ({pct:.0f}%)")
 
-carpetas_solo_en_base = set(indexadas) - {r for r, _, _, o in filas if not o}
-if carpetas_solo_en_base:
-    print("\n  Carpetas que estan en la base pero ya no en Outlook:")
-    for c in sorted(carpetas_solo_en_base):
-        print(f"    {c}  ({indexadas[c]})")
+huerfanas = set(indexadas) - {r for r, _, o in filas if not o}
+if huerfanas:
+    print("\n  Carpetas en la base que Outlook ya no ofrece")
+    print("  (normal si cerraste un archivo .pst):")
+    for c in sorted(huerfanas):
+        print(f"    {c}  ({indexadas[c]} correos)")
 
-print("\n" + "=" * 74)
-if faltantes:
-    print("\n  HAY CORREOS SIN INDEXAR:\n")
-    for ruta, correos, en_base in faltantes:
-        print(f"    {ruta}: {correos} en Outlook, {en_base} en la base")
+print("\n" + "=" * 78)
+if sospechosas:
+    print("\n  CARPETAS CON CORREOS QUE NO SE INDEXARON:\n")
+    for ruta, total, _ in sospechosas:
+        print(f"    {ruta}: {total} elementos en Outlook, 0 en la base")
     print("\n  Pulsa 'Actualizar correos' en la aplicacion.")
 else:
-    print("\n  Todo lo que Outlook ofrece esta indexado.")
+    print("\n  No hay carpetas con correos sin indexar.")
 print()

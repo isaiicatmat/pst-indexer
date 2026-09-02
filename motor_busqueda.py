@@ -272,7 +272,7 @@ def importar_base_antigua(base, ruta_antigua="email_index.db"):
     """
     if not os.path.exists(ruta_antigua):
         return 0
-    marca = os.path.join(os.path.dirname(os.path.abspath(ruta_antigua)), MARCA_MIGRACION)
+    marca = os.path.join(os.path.dirname(os.path.abspath(base.ruta)), MARCA_MIGRACION)
     if os.path.exists(marca):
         return 0
     try:

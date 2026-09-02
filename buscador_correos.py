@@ -200,7 +200,7 @@ class Ventana(QMainWindow):
         self.btn_pst.clicked.connect(self.agregar_pst)
         self.btn_opciones = QToolButton()
         self.btn_opciones.setText("⋯")
-        self.btn_opciones.setObjectName("secundario")
+        self.btn_opciones.setObjectName("opciones")
         self.btn_opciones.setCursor(Qt.PointingHandCursor)
         self.btn_opciones.setToolTip("Más opciones")
         self.btn_opciones.setPopupMode(QToolButton.InstantPopup)
@@ -725,6 +725,12 @@ class Ventana(QMainWindow):
         QPushButton#secundario:hover, QToolButton#secundario:hover {{ background:{C_PANEL}; }}
         QToolButton#secundario:checked {{ background:{C_ACENTO2};
             border-color:{C_ACENTO}; color:{C_ACENTO}; font-weight:600; }}
+        /* El indicador de menu descentraba el texto del boton "..." */
+        QToolButton#opciones {{ background:{C_FONDO}; color:{C_TEXTO};
+            border:1px solid {C_BORDE}; border-radius:7px;
+            padding:8px 14px; font-size:15px; font-weight:700; }}
+        QToolButton#opciones:hover {{ background:{C_PANEL}; }}
+        QToolButton#opciones::menu-indicator {{ image:none; width:0; }}
         QLineEdit, QComboBox, QDateEdit {{ padding:6px 9px; border:1px solid {C_BORDE};
             border-radius:6px; background:{C_FONDO}; }}
         QLineEdit:focus, QComboBox:focus, QDateEdit:focus {{ border-color:{C_ACENTO}; }}
