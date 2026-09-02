@@ -262,16 +262,19 @@ class Ventana(QMainWindow):
         self.f_carpeta.currentIndexChanged.connect(self.buscar)
         h.addWidget(self.f_carpeta)
 
-        self.f_usar_fecha = QToolButton()
-        self.f_usar_fecha.setText("Filtrar por fecha")
-        self.f_usar_fecha.setCheckable(True)
-        self.f_usar_fecha.setObjectName("secundario")
-        self.f_usar_fecha.setCursor(Qt.PointingHandCursor)
-        self.f_usar_fecha.toggled.connect(self._alternar_fechas)
-        h.addWidget(self.f_usar_fecha)
+        h.addWidget(QLabel("Fecha:"))
+        self.f_periodo = QComboBox()
+        self.f_periodo.setMinimumWidth(150)
+        for etiqueta, clave in (("Cualquier fecha", ""), ("Hoy", "hoy"),
+                                ("Últimos 7 días", "7d"), ("Últimos 30 días", "30d"),
+                                ("Últimos 3 meses", "3m"), ("Este año", "anio"),
+                                ("Año pasado", "anio-1"), ("Entre dos fechas…", "rango")):
+            self.f_periodo.addItem(etiqueta, clave)
+        self.f_periodo.currentIndexChanged.connect(self._cambiar_periodo)
+        h.addWidget(self.f_periodo)
 
         self.lbl_desde = QLabel("del")
-        self.f_desde = QDateEdit(QDate.currentDate().addYears(-1))
+        self.f_desde = QDateEdit(QDate.currentDate().addMonths(-1))
         self.lbl_hasta = QLabel("al")
         self.f_hasta = QDateEdit(QDate.currentDate())
         for w in (self.f_desde, self.f_hasta):
@@ -279,6 +282,8 @@ class Ventana(QMainWindow):
             w.dateChanged.connect(self.buscar)
         for w in (self.lbl_desde, self.f_desde, self.lbl_hasta, self.f_hasta):
             w.setVisible(False); h.addWidget(w)
+        self.f_desde.setToolTip("Se incluye este día completo")
+        self.f_hasta.setToolTip("Se incluye este día completo")
 
         h.addStretch()
         b_limpiar = QPushButton("Limpiar filtros")
@@ -407,19 +412,74 @@ class Ventana(QMainWindow):
 
     def _alternar_filtros(self, activo):
         self.panel_filtros.setVisible(activo)
+        self._marcar_filtros_activos()
 
-    def _alternar_fechas(self, activo):
+    def _filtros_activos(self):
+        """Que filtros hay puestos ahora mismo, en lenguaje llano."""
+        activos = []
+        if self.f_remitente.text().strip():
+            activos.append(f"remitente «{self.f_remitente.text().strip()}»")
+        if self.f_carpeta.currentIndex() > 0:
+            activos.append(f"carpeta «{self.f_carpeta.currentText().split('  (')[0]}»")
+        if self.f_periodo.currentIndex() > 0:
+            activos.append(f"fecha: {self.f_periodo.currentText().rstrip('…')}")
+        return activos
+
+    def _marcar_filtros_activos(self):
+        """Avisa de los filtros puestos aunque el panel este plegado.
+
+        Sin esto, alguien que deja un filtro y pliega el panel busca creyendo
+        que ve todo su correo, y concluye que la aplicacion no encuentra nada.
+        """
+        activos = self._filtros_activos()
+        self.btn_filtros.setText(f"Filtros ({len(activos)})" if activos else "Filtros")
+        self.btn_filtros.setProperty("conFiltros", bool(activos))
+        self.btn_filtros.style().unpolish(self.btn_filtros)
+        self.btn_filtros.style().polish(self.btn_filtros)
+        if activos and not self.panel_filtros.isVisible():
+            self.pista.setText("Filtrando por " + ", ".join(activos)
+                               + ".  Pulsa «Filtros» para cambiarlo.")
+        elif not activos:
+            self.pista.setText("Se busca en el remitente, el asunto y el "
+                               "contenido de todos los correos.")
+
+    def _cambiar_periodo(self, *_):
+        """Los calendarios solo aparecen si se pide un rango a mano."""
+        a_mano = self.f_periodo.currentData() == "rango"
         for w in (self.lbl_desde, self.f_desde, self.lbl_hasta, self.f_hasta):
-            w.setVisible(activo)
+            w.setVisible(a_mano)
         self.buscar()
+
+    def rango_de_fechas(self):
+        """Convierte el periodo elegido en (desde, hasta) con formato YYYY-MM-DD."""
+        clave = self.f_periodo.currentData() or ""
+        hoy = QDate.currentDate()
+        f = "yyyy-MM-dd"
+        if clave == "hoy":
+            return hoy.toString(f), hoy.toString(f)
+        if clave == "7d":
+            return hoy.addDays(-6).toString(f), hoy.toString(f)
+        if clave == "30d":
+            return hoy.addDays(-29).toString(f), hoy.toString(f)
+        if clave == "3m":
+            return hoy.addMonths(-3).toString(f), hoy.toString(f)
+        if clave == "anio":
+            return QDate(hoy.year(), 1, 1).toString(f), hoy.toString(f)
+        if clave == "anio-1":
+            a = hoy.year() - 1
+            return QDate(a, 1, 1).toString(f), QDate(a, 12, 31).toString(f)
+        if clave == "rango":
+            return self.f_desde.date().toString(f), self.f_hasta.date().toString(f)
+        return "", ""
 
     def _limpiar(self):
         for w in (self.caja, self.f_remitente):
             w.blockSignals(True); w.clear(); w.blockSignals(False)
         self.f_carpeta.blockSignals(True); self.f_carpeta.setCurrentIndex(0)
         self.f_carpeta.blockSignals(False)
-        self.f_usar_fecha.setChecked(False)
-        self.buscar()
+        self.f_periodo.blockSignals(True); self.f_periodo.setCurrentIndex(0)
+        self.f_periodo.blockSignals(False)
+        self._cambiar_periodo()
         self.caja.setFocus()
 
     def buscar(self):
@@ -431,15 +491,15 @@ class Ventana(QMainWindow):
             return
         self._modo_vacio(False)
         texto = self.caja.text().strip()
-        usar_f = self.f_usar_fecha.isChecked()
+        desde, hasta = self.rango_de_fechas()
         res = self.base.buscar(
             texto=texto,
             remitente=self.f_remitente.text().strip(),
             carpeta=self.f_carpeta.currentData() or "",
-            desde=self.f_desde.date().toString("yyyy-MM-dd") if usar_f else "",
-            hasta=self.f_hasta.date().toString("yyyy-MM-dd") if usar_f else "",
+            desde=desde, hasta=hasta,
             limite=500)
         self.terminos = [p for p in re.split(r"[^\w@.\-]+", texto) if len(p) > 1]
+        self._marcar_filtros_activos()
         self._pintar(res, texto)
 
     def _pintar(self, res, texto):
@@ -463,8 +523,10 @@ class Ventana(QMainWindow):
             return
         tope = "  (se muestran los 500 más recientes)" if len(res) >= 500 else ""
         etiqueta = "correo encontrado" if len(res) == 1 else "correos encontrados"
-        self.conteo.setText(f"{len(res)} {etiqueta}{tope}" if texto
-                            else f"{len(res)} correos más recientes")
+        if texto or self._filtros_activos():
+            self.conteo.setText(f"{len(res)} {etiqueta}{tope}")
+        else:
+            self.conteo.setText(f"{len(res)} correos más recientes{tope}")
         self.lista.setCurrentRow(0)
 
     # ---------------------------------------------------------------- detalle
@@ -727,6 +789,8 @@ class Ventana(QMainWindow):
         QPushButton#secundario:hover, QToolButton#secundario:hover {{ background:{C_PANEL}; }}
         QToolButton#secundario:checked {{ background:{C_ACENTO2};
             border-color:{C_ACENTO}; color:{C_ACENTO}; font-weight:600; }}
+        QToolButton#secundario[conFiltros="true"] {{ background:#FFF4D6;
+            border-color:#E0A83C; color:#8A5A00; font-weight:600; }}
         /* El indicador de menu descentraba el texto del boton "..." */
         QToolButton#opciones {{ background:{C_FONDO}; color:{C_TEXTO};
             border:1px solid {C_BORDE}; border-radius:7px;

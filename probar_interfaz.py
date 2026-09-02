@@ -248,6 +248,141 @@ class BotonPstTests(unittest.TestCase):
         self.assertTrue(self.v.btn_pst.isEnabled())
 
 
+class FiltroFechaTests(unittest.TestCase):
+    """Los periodos rapidos de fecha."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.ruta = tempfile.mktemp(suffix=".db")
+        db = BaseCorreos(cls.ruta)
+        from PyQt5.QtCore import QDate
+        hoy = QDate.currentDate()
+        cls.hoy = hoy
+        # un correo de hoy, uno de hace 3 dias, uno de hace 60, uno del anio pasado
+        fechas = [(hoy, "A"), (hoy.addDays(-3), "B"), (hoy.addDays(-60), "C"),
+                  (QDate(hoy.year() - 1, 6, 15), "D")]
+        db.guardar([dict(entry_id=k, carpeta="B", remitente="R", correo_rem="",
+                         destinatarios="", asunto=f"Correo {k}", cuerpo="texto",
+                         fecha=f.toString("yyyy-MM-dd") + " 10:00:00", adjuntos=0)
+                    for f, k in fechas])
+        db.cerrar()
+        cls.v = bc.Ventana(cls.ruta); cls.v.show(); app.processEvents()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.v.base.cerrar()
+        for s in ("", "-wal", "-shm"):
+            try: os.remove(cls.ruta + s)
+            except OSError: pass
+
+    def _elegir(self, clave):
+        i = self.v.f_periodo.findData(clave)
+        self.assertGreaterEqual(i, 0, f"falta el periodo {clave}")
+        self.v.f_periodo.setCurrentIndex(i)
+        app.processEvents()
+
+    def test_por_defecto_no_filtra(self):
+        self._elegir("")
+        self.assertEqual(self.v.rango_de_fechas(), ("", ""))
+        self.assertEqual(self.v.lista.count(), 4)
+
+    def test_hoy(self):
+        self._elegir("hoy")
+        d, h = self.v.rango_de_fechas()
+        self.assertEqual(d, h)
+        self.assertEqual(self.v.lista.count(), 1)
+
+    def test_ultimos_7_dias_incluye_hoy(self):
+        self._elegir("7d")
+        d, h = self.v.rango_de_fechas()
+        self.assertEqual(h, self.hoy.toString("yyyy-MM-dd"))
+        self.assertEqual(d, self.hoy.addDays(-6).toString("yyyy-MM-dd"))
+        self.assertEqual(self.v.lista.count(), 2, "el de hoy y el de hace 3 dias")
+
+    def test_ultimos_30_dias(self):
+        self._elegir("30d")
+        self.assertEqual(self.v.lista.count(), 2)
+
+    def test_ultimos_3_meses_alcanza_los_60_dias(self):
+        self._elegir("3m")
+        self.assertEqual(self.v.lista.count(), 3)
+
+    def test_este_anio_empieza_en_enero(self):
+        self._elegir("anio")
+        d, _ = self.v.rango_de_fechas()
+        self.assertEqual(d, f"{self.hoy.year()}-01-01")
+
+    def test_anio_pasado_es_el_anio_completo(self):
+        self._elegir("anio-1")
+        d, h = self.v.rango_de_fechas()
+        a = self.hoy.year() - 1
+        self.assertEqual((d, h), (f"{a}-01-01", f"{a}-12-31"))
+        self.assertEqual(self.v.lista.count(), 1, "solo el correo del anio pasado")
+
+    def test_los_calendarios_solo_salen_con_rango_a_mano(self):
+        self.v.btn_filtros.setChecked(True)      # abrir el panel de filtros
+        app.processEvents()
+        self._elegir("30d")
+        self.assertFalse(self.v.f_desde.isVisible(), "sin rango no hacen falta")
+        self._elegir("rango")
+        self.assertTrue(self.v.f_desde.isVisible())
+        self.assertTrue(self.v.f_hasta.isVisible())
+        self.v.btn_filtros.setChecked(False)
+        app.processEvents()
+
+    def test_avisa_de_los_filtros_aunque_el_panel_este_plegado(self):
+        """Un filtro olvidado hace creer que faltan correos."""
+        self.v.btn_filtros.setChecked(False)
+        self._elegir("hoy")
+        self.assertIn("(1)", self.v.btn_filtros.text())
+        self.assertIn("Filtrando por", self.v.pista.text())
+        self.assertIn("Hoy", self.v.pista.text())
+        self.assertTrue(self.v.btn_filtros.property("conFiltros"))
+
+        self.v._limpiar(); app.processEvents()
+        self.assertEqual(self.v.btn_filtros.text(), "Filtros")
+        self.assertNotIn("Filtrando por", self.v.pista.text())
+        self.assertFalse(self.v.btn_filtros.property("conFiltros"))
+
+    def test_el_conteo_no_dice_recientes_si_hay_filtro(self):
+        self.v._limpiar(); app.processEvents()
+        self.assertIn("más recientes", self.v.conteo.text())
+        self._elegir("hoy")
+        self.assertIn("encontrado", self.v.conteo.text())
+        self.assertNotIn("más recientes", self.v.conteo.text())
+        self.v._limpiar(); app.processEvents()
+
+    def test_cuenta_varios_filtros(self):
+        self.v._limpiar(); app.processEvents()
+        self.v.f_remitente.setText("R")
+        self._elegir("hoy")
+        self.assertIn("(2)", self.v.btn_filtros.text())
+        self.v._limpiar(); app.processEvents()
+
+    def test_rango_a_mano_incluye_los_dos_extremos(self):
+        from PyQt5.QtCore import QDate
+        self._elegir("rango")
+        self.v.f_desde.setDate(self.hoy.addDays(-3))
+        self.v.f_hasta.setDate(self.hoy.addDays(-3))
+        app.processEvents()
+        self.assertEqual(self.v.lista.count(), 1,
+                         "un solo dia debe encontrar el correo de ese dia")
+
+    def test_limpiar_devuelve_a_cualquier_fecha(self):
+        self._elegir("hoy")
+        self.v._limpiar(); app.processEvents()
+        self.assertEqual(self.v.f_periodo.currentData(), "")
+        self.assertEqual(self.v.lista.count(), 4)
+
+    def test_fecha_se_combina_con_texto(self):
+        self._elegir("")
+        self.v.caja.setText("Correo"); self.v.buscar(); app.processEvents()
+        self.assertEqual(self.v.lista.count(), 4)
+        self._elegir("hoy")
+        self.assertEqual(self.v.lista.count(), 1)
+        self.v.caja.clear()
+
+
 class VaciarIndiceTests(unittest.TestCase):
     """Vaciar el indice desde la app, sin borrar archivos a mano."""
 
