@@ -151,10 +151,15 @@ class BaseCorreos:
         return cur.rowcount
 
     def vaciar(self):
+        """Deja la base vacia sin tener que borrar archivos a mano."""
         self.con.execute("DELETE FROM correos")
         if self.fts:
             self.con.execute("INSERT INTO correos_fts(correos_fts) VALUES ('rebuild')")
         self.con.commit()
+        try:
+            self.con.execute("VACUUM")      # devuelve el espacio al disco
+        except sqlite3.OperationalError:
+            pass
 
     # ---------------------------------------------------------------- lectura
     def total(self):
@@ -255,9 +260,20 @@ class BaseCorreos:
             pass
 
 
+MARCA_MIGRACION = ".version_anterior_importada"
+
+
 def importar_base_antigua(base, ruta_antigua="email_index.db"):
-    """Trae los correos de la version anterior para no empezar de cero."""
+    """Trae los correos de la version anterior para no empezar de cero.
+
+    Solo ocurre UNA vez: despues se deja una marca. Sin ella, borrar
+    correos.db para empezar limpio volvia a traer los correos viejos, que es
+    justo lo contrario de lo que espera quien lo borra.
+    """
     if not os.path.exists(ruta_antigua):
+        return 0
+    marca = os.path.join(os.path.dirname(os.path.abspath(ruta_antigua)), MARCA_MIGRACION)
+    if os.path.exists(marca):
         return 0
     try:
         vieja = sqlite3.connect(ruta_antigua)
@@ -281,7 +297,14 @@ def importar_base_antigua(base, ruta_antigua="email_index.db"):
             "fecha": normalizar_fecha(f["date"] or ""),
             "adjuntos": 0,
         })
-    return base.guardar(lote) if lote else 0
+    n = base.guardar(lote) if lote else 0
+    try:
+        with open(marca, "w", encoding="utf-8") as f:
+            f.write("Los correos de email_index.db ya se importaron una vez.\n"
+                    "Borra este archivo si quieres volver a importarlos.\n")
+    except OSError:
+        pass
+    return n
 
 
 def normalizar_fecha(valor):

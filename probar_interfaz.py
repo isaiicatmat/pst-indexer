@@ -245,6 +245,74 @@ class BotonPstTests(unittest.TestCase):
         self.assertTrue(self.v.btn_pst.isEnabled())
 
 
+class VaciarIndiceTests(unittest.TestCase):
+    """Vaciar el indice desde la app, sin borrar archivos a mano."""
+
+    def setUp(self):
+        self.ruta = tempfile.mktemp(suffix=".db")
+        db = BaseCorreos(self.ruta); db.guardar(DATOS); db.cerrar()
+        self.v = bc.Ventana(self.ruta); self.v.show(); app.processEvents()
+
+    def tearDown(self):
+        self.v.base.cerrar()
+        for s in ("", "-wal", "-shm"):
+            try: os.remove(self.ruta + s)
+            except OSError: pass
+
+    def _responder(self, respuesta):
+        from PyQt5.QtWidgets import QMessageBox
+        self._orig_q = QMessageBox.question
+        self._orig_i = QMessageBox.information
+        self.mensajes = []
+        QMessageBox.question = staticmethod(
+            lambda p, t, m, *a, **k: self.mensajes.append(m) or respuesta)
+        QMessageBox.information = staticmethod(lambda p, t, m, *a, **k: self.mensajes.append(m))
+
+    def _restaurar(self):
+        from PyQt5.QtWidgets import QMessageBox
+        QMessageBox.question = self._orig_q
+        QMessageBox.information = self._orig_i
+
+    def test_vacia_y_vuelve_a_la_bienvenida(self):
+        from PyQt5.QtWidgets import QMessageBox
+        self._responder(QMessageBox.Yes)
+        try:
+            self.v.vaciar_indice()
+        finally:
+            self._restaurar()
+        self.assertEqual(self.v.base.total(), 0)
+        self.assertEqual(self.v.pilas.currentIndex(), 1)
+        self.assertIn("NO se tocan", self.mensajes[0], "debe aclarar que Outlook no se toca")
+
+    def test_cancelar_no_borra_nada(self):
+        from PyQt5.QtWidgets import QMessageBox
+        self._responder(QMessageBox.No)
+        try:
+            self.v.vaciar_indice()
+        finally:
+            self._restaurar()
+        self.assertEqual(self.v.base.total(), len(DATOS))
+
+    def test_indice_ya_vacio_lo_dice(self):
+        from PyQt5.QtWidgets import QMessageBox
+        self.v.base.vaciar()
+        self._responder(QMessageBox.Yes)
+        try:
+            self.v.vaciar_indice()
+        finally:
+            self._restaurar()
+        self.assertIn("ya está vacío", self.mensajes[0])
+
+    def test_muestra_donde_estan_los_datos(self):
+        from PyQt5.QtWidgets import QMessageBox
+        self._responder(QMessageBox.Yes)
+        try:
+            self.v.mostrar_carpeta_datos()
+        finally:
+            self._restaurar()
+        self.assertIn(self.ruta, self.mensajes[0])
+
+
 class CierreTests(unittest.TestCase):
     def test_cerrar_con_busqueda_pendiente_no_truena(self):
         """El temporizador de busqueda no debe dispararse sobre una base cerrada."""

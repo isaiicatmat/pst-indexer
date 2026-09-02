@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
     QPushButton, QLabel, QListWidget, QListWidgetItem, QStyledItemDelegate,
     QStyle, QTextBrowser, QSplitter, QFrame, QMessageBox, QProgressDialog,
     QDateEdit, QComboBox, QToolButton, QSizePolicy, QStackedWidget, QShortcut,
-    QFileDialog)
+    QFileDialog, QMenu)
 
 from motor_busqueda import BaseCorreos, importar_base_antigua, carpeta_datos
 from indexador_outlook import (Indexador, outlook_disponible,
@@ -198,8 +198,21 @@ class Ventana(QMainWindow):
         self.btn_pst.setToolTip("Para buscar dentro de un archivo .pst archivado "
                                 "que no está abierto en Outlook")
         self.btn_pst.clicked.connect(self.agregar_pst)
+        self.btn_opciones = QToolButton()
+        self.btn_opciones.setText("⋯")
+        self.btn_opciones.setObjectName("secundario")
+        self.btn_opciones.setCursor(Qt.PointingHandCursor)
+        self.btn_opciones.setToolTip("Más opciones")
+        self.btn_opciones.setPopupMode(QToolButton.InstantPopup)
+        menu = QMenu(self)
+        menu.addAction("Vaciar el índice y empezar de cero", self.vaciar_indice)
+        menu.addSeparator()
+        menu.addAction("Ver dónde se guardan los datos", self.mostrar_carpeta_datos)
+        self.btn_opciones.setMenu(menu)
+
         h.addWidget(self.btn_pst)
         h.addWidget(self.btn_actualizar)
+        h.addWidget(self.btn_opciones)
         return b
 
     def _barra_busqueda(self):
@@ -534,6 +547,41 @@ class Ventana(QMainWindow):
                                 f"No se pudo abrir el correo en Outlook.\n\nDetalle: {e}")
 
     # ---------------------------------------------------------------- indexar
+    def vaciar_indice(self):
+        """Deja la app como recien instalada, sin borrar nada de Outlook."""
+        n = self.base.total()
+        if n == 0:
+            QMessageBox.information(self, APP, "El índice ya está vacío.")
+            return
+        r = QMessageBox.question(
+            self, APP,
+            f"Se van a quitar los {n:,} correos del índice de esta aplicación.\n\n"
+            "Tus correos de Outlook NO se tocan: siguen intactos. Solo se borra "
+            "la copia que usa el buscador, y puedes volver a crearla con "
+            "«Actualizar correos».\n\n¿Continuar?".replace(",", " "),
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if r != QMessageBox.Yes:
+            return
+        self.base.vaciar()
+        self._cargar_carpetas()
+        self._refrescar_estado()
+        self._modo_vacio(True)
+        self._nota("Índice vaciado. Pulsa «Actualizar correos» para reconstruirlo.")
+
+    def mostrar_carpeta_datos(self):
+        carpeta = os.path.dirname(os.path.abspath(self.ruta_db))
+        mb = 0
+        try:
+            mb = os.path.getsize(self.ruta_db) / 1024 / 1024
+        except OSError:
+            pass
+        QMessageBox.information(
+            self, APP,
+            f"Los correos indexados se guardan aquí:\n\n{self.ruta_db}\n\n"
+            f"Tamaño actual: {mb:,.1f} MB\n\n"
+            "Es una copia local para poder buscar rápido. Si la borras, se "
+            "reconstruye con «Actualizar correos».".replace(",", " "))
+
     def agregar_pst(self):
         """Abre un .pst archivado dentro de Outlook y lo indexa.
         Se usa el propio Outlook como lector: no hace falta nada mas."""

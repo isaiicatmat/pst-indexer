@@ -197,6 +197,29 @@ class MigracionTests(unittest.TestCase):
         self.assertEqual(len(db.buscar(texto="viejo")), 1)
         db.cerrar()
 
+    def test_solo_importa_una_vez(self):
+        """Borrar correos.db debe dejar la app limpia, no reimportar lo viejo."""
+        import sqlite3, os as _os
+        d = tempfile.mkdtemp()
+        vieja = _os.path.join(d, "email_index.db")
+        con = sqlite3.connect(vieja)
+        con.execute("CREATE TABLE emails (id INTEGER PRIMARY KEY, sender TEXT, recipient TEXT,"
+                    " subject TEXT, body TEXT, date TEXT, pst_file TEXT, indexed_date TEXT)")
+        con.execute("INSERT INTO emails (sender,subject,body,date,pst_file)"
+                    " VALUES ('Ana','Hola','cuerpo','2024-01-01 08:00:00','Outlook:Bandeja')")
+        con.commit(); con.close()
+
+        b1 = BaseCorreos(_os.path.join(d, "correos.db"))
+        self.assertEqual(importar_base_antigua(b1, vieja), 1)
+        b1.cerrar()
+        _os.remove(_os.path.join(d, "correos.db"))
+
+        b2 = BaseCorreos(_os.path.join(d, "correos.db"))
+        self.assertEqual(importar_base_antigua(b2, vieja), 0,
+                         "no debe reimportar tras borrar la base")
+        self.assertEqual(b2.total(), 0)
+        b2.cerrar()
+
     def test_sin_base_vieja_no_truena(self):
         db = BaseCorreos(tempfile.mktemp(suffix=".db"))
         self.assertEqual(importar_base_antigua(db, "no_existe_12345.db"), 0)
